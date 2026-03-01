@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo, lazy, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { useI18n } from "@/lib/i18n/context";
 import type { UiLabels } from "@/lib/i18n/labels";
-import FaqModal from "./FaqModal";
+const FaqModal = lazy(() => import("./FaqModal"));
 import type { Message, FlowOption, FlowStep } from "@/types/chat";
 import { fetchRetry } from "@/lib/fetch-retry";
 
@@ -690,12 +690,14 @@ export default function Chat() {
       )}
 
       {showFaqModal && (
-        <FaqModal
-          faqs={faqs}
-          lang={lang}
-          onClose={() => setShowFaqModal(false)}
-          onSelectFaq={handleFaqSelect}
-        />
+        <Suspense fallback={null}>
+          <FaqModal
+            faqs={faqs}
+            lang={lang}
+            onClose={() => setShowFaqModal(false)}
+            onSelectFaq={handleFaqSelect}
+          />
+        </Suspense>
       )}
     </div>
   );

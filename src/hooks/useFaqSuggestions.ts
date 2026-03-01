@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 
 export function useFaqSuggestions(
   input: string,
@@ -6,11 +6,26 @@ export function useFaqSuggestions(
   starters: { question: string; questionNl: string; questionDe: string; answer: string; answerNl: string; answerDe: string }[],
   getQ: (item: { question: string; questionNl: string; questionDe: string }) => string
 ) {
+  const [debouncedInput, setDebouncedInput] = useState(input);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    // Clear instantly when input is emptied
+    if (!input.trim()) {
+      setDebouncedInput("");
+      return;
+    }
+    timerRef.current = setTimeout(() => setDebouncedInput(input), 150);
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, [input]);
+
   const faqSuggestions = useMemo(() => {
-    const query = input.trim().toLowerCase();
+    const query = debouncedInput.trim().toLowerCase();
     if (query.length < 2) return [];
     // Check if input matches a starter exactly (user clicked a starter)
-    if (starters.some((s) => getQ(s) === input)) return [];
+    if (starters.some((s) => getQ(s) === debouncedInput)) return [];
     return faqs
       .filter((f) => {
         const lower = getQ(f).toLowerCase();
@@ -19,7 +34,7 @@ export function useFaqSuggestions(
       })
       .map((f) => getQ(f))
       .slice(0, 5);
-  }, [input, faqs, starters, getQ]);
+  }, [debouncedInput, faqs, starters, getQ]);
 
   const [selectedSuggestion, setSelectedSuggestion] = useState(-1);
 
