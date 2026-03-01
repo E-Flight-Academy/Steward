@@ -11,6 +11,7 @@ import { getSession, fetchCustomerOrders, buildOrdersContext, type ShopifyOrder 
 import { getUserRoles } from "@/lib/airtable";
 import { getFoldersForRoles } from "@/lib/role-access";
 import { chatRequestSchema } from "@/lib/api-schemas";
+import { logger, apiTimer } from "@/lib/logger";
 
 export const maxDuration = 60;
 
@@ -22,6 +23,7 @@ function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T
 }
 
 export async function POST(request: NextRequest) {
+  const logDone = apiTimer("POST /api/chat");
   try {
     const parsed = chatRequestSchema.safeParse(await request.json());
     if (!parsed.success) {
@@ -483,10 +485,12 @@ export async function POST(request: NextRequest) {
 
           controller.enqueue(encoder.encode(JSON.stringify(done) + "\n"));
           controller.close();
+          logDone({ status: 200 });
         } catch (err) {
-          console.error("Stream error:", err);
+          logger.error("Stream error", { error: String(err) });
           controller.enqueue(encoder.encode(JSON.stringify({ type: "error", error: "Stream interrupted" }) + "\n"));
           controller.close();
+          logDone({ status: 500 });
         }
       },
     });
@@ -499,7 +503,8 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error("Chat API error:", error);
+    logger.error("Chat API error", { error: String(error) });
+    logDone({ status: 500 });
     return NextResponse.json(
       { error: "Something went wrong. Please try again in a moment." },
       { status: 500 }

@@ -1,4 +1,5 @@
 import { Redis } from "@upstash/redis";
+import { logger } from "@/lib/logger";
 
 // --- Keys ---
 const KB_CONTEXT_KEY = "kb:context";
@@ -194,15 +195,22 @@ function getRedis(): Redis | null {
   }
 }
 
-// --- Context ---
-export async function getKvContext(): Promise<KvContextData | null> {
+/** Generic cache-get with hit/miss logging */
+async function kvGet<T>(key: string): Promise<T | null> {
   try {
     const r = getRedis();
     if (!r) return null;
-    return await r.get<KvContextData>(KB_CONTEXT_KEY);
+    const data = await r.get<T>(key);
+    logger.info(`KV ${data ? "hit" : "miss"}`, { key });
+    return data;
   } catch {
     return null;
   }
+}
+
+// --- Context ---
+export async function getKvContext(): Promise<KvContextData | null> {
+  return kvGet<KvContextData>(KB_CONTEXT_KEY);
 }
 
 export async function setKvContext(data: KvContextData): Promise<void> {
@@ -217,13 +225,7 @@ export async function setKvContext(data: KvContextData): Promise<void> {
 
 // --- Gemini URIs ---
 export async function getKvGeminiUris(): Promise<KvGeminiUris | null> {
-  try {
-    const r = getRedis();
-    if (!r) return null;
-    return await r.get<KvGeminiUris>(KB_GEMINI_URIS_KEY);
-  } catch {
-    return null;
-  }
+  return kvGet<KvGeminiUris>(KB_GEMINI_URIS_KEY);
 }
 
 export async function setKvGeminiUris(data: KvGeminiUris): Promise<void> {
@@ -238,13 +240,7 @@ export async function setKvGeminiUris(data: KvGeminiUris): Promise<void> {
 
 // --- Status ---
 export async function getKvStatus(): Promise<KvStatusData | null> {
-  try {
-    const r = getRedis();
-    if (!r) return null;
-    return await r.get<KvStatusData>(KB_STATUS_KEY);
-  } catch {
-    return null;
-  }
+  return kvGet<KvStatusData>(KB_STATUS_KEY);
 }
 
 export async function setKvStatus(data: KvStatusData): Promise<void> {
@@ -259,13 +255,7 @@ export async function setKvStatus(data: KvStatusData): Promise<void> {
 
 // --- Config ---
 export async function getKvConfig(): Promise<KvConfigData | null> {
-  try {
-    const r = getRedis();
-    if (!r) return null;
-    return await r.get<KvConfigData>(KB_CONFIG_KEY);
-  } catch {
-    return null;
-  }
+  return kvGet<KvConfigData>(KB_CONFIG_KEY);
 }
 
 export async function setKvConfig(data: KvConfigData): Promise<void> {
@@ -280,13 +270,7 @@ export async function setKvConfig(data: KvConfigData): Promise<void> {
 
 // --- FAQs ---
 export async function getKvFaqs(): Promise<KvFaqsData | null> {
-  try {
-    const r = getRedis();
-    if (!r) return null;
-    return await r.get<KvFaqsData>(KB_FAQS_KEY);
-  } catch {
-    return null;
-  }
+  return kvGet<KvFaqsData>(KB_FAQS_KEY);
 }
 
 export async function setKvFaqs(data: KvFaqsData): Promise<void> {
@@ -301,13 +285,7 @@ export async function setKvFaqs(data: KvFaqsData): Promise<void> {
 
 // --- Website ---
 export async function getKvWebsite(): Promise<KvWebsiteData | null> {
-  try {
-    const r = getRedis();
-    if (!r) return null;
-    return await r.get<KvWebsiteData>(KB_WEBSITE_KEY);
-  } catch {
-    return null;
-  }
+  return kvGet<KvWebsiteData>(KB_WEBSITE_KEY);
 }
 
 export async function setKvWebsite(data: KvWebsiteData): Promise<void> {
@@ -322,13 +300,7 @@ export async function setKvWebsite(data: KvWebsiteData): Promise<void> {
 
 // --- Guided Flows ---
 export async function getKvFlows(): Promise<KvFlowsData | null> {
-  try {
-    const r = getRedis();
-    if (!r) return null;
-    return await r.get<KvFlowsData>(KB_FLOWS_KEY);
-  } catch {
-    return null;
-  }
+  return kvGet<KvFlowsData>(KB_FLOWS_KEY);
 }
 
 export async function setKvFlows(data: KvFlowsData): Promise<void> {
@@ -343,13 +315,7 @@ export async function setKvFlows(data: KvFlowsData): Promise<void> {
 
 // --- Products (Shopify) ---
 export async function getKvProducts(): Promise<KvProductsData | null> {
-  try {
-    const r = getRedis();
-    if (!r) return null;
-    return await r.get<KvProductsData>(KB_PRODUCTS_KEY);
-  } catch {
-    return null;
-  }
+  return kvGet<KvProductsData>(KB_PRODUCTS_KEY);
 }
 
 export async function setKvProducts(data: KvProductsData): Promise<void> {
@@ -364,13 +330,7 @@ export async function setKvProducts(data: KvProductsData): Promise<void> {
 
 // --- Role Access ---
 export async function getKvRoleAccess(): Promise<KvRoleAccessData | null> {
-  try {
-    const r = getRedis();
-    if (!r) return null;
-    return await r.get<KvRoleAccessData>(KB_ROLE_ACCESS_KEY);
-  } catch {
-    return null;
-  }
+  return kvGet<KvRoleAccessData>(KB_ROLE_ACCESS_KEY);
 }
 
 export async function setKvRoleAccess(data: KvRoleAccessData): Promise<void> {
