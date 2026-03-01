@@ -1,36 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomBytes } from "crypto";
 import { setKvSharedChat, type KvSharedChat } from "@/lib/kv-cache";
+import { chatShareSchema } from "@/lib/api-schemas";
 
 export async function POST(request: NextRequest) {
   try {
-    const { messages, flowContext, lang, currentFlowStepName, flowPhase } = await request.json();
-
-    if (!Array.isArray(messages) || messages.length === 0) {
-      return NextResponse.json(
-        { error: "No messages to share" },
-        { status: 400 }
-      );
+    const parsed = chatShareSchema.safeParse(await request.json());
+    if (!parsed.success) {
+      return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
     }
-
-    for (const msg of messages) {
-      if (!msg.role || typeof msg.content !== "string" || !["user", "assistant"].includes(msg.role)) {
-        return NextResponse.json(
-          { error: "Invalid message format" },
-          { status: 400 }
-        );
-      }
-    }
+    const { messages, flowContext, lang, currentFlowStepName, flowPhase } = parsed.data;
 
     const id = randomBytes(6).toString("base64url");
 
     const data: KvSharedChat = {
-      messages: messages.map((m: { role: string; content: string }) => ({
-        role: m.role as "user" | "assistant",
+      messages: messages.map((m) => ({
+        role: m.role,
         content: m.content,
       })),
-      flowContext: flowContext && typeof flowContext === "object" ? flowContext : {},
-      lang: lang || "en",
+      flowContext: flowContext ?? {},
+      lang,
       sharedAt: Date.now(),
       currentFlowStepName: currentFlowStepName || undefined,
       flowPhase: flowPhase || undefined,

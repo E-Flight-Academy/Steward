@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenerativeAI, type Content } from "@google/generative-ai";
 import { NextRequest, NextResponse } from "next/server";
 import { getRelevantDocuments, getBinaryDocumentContext } from "@/lib/documents";
 import { getConfig } from "@/lib/config";
@@ -10,6 +10,7 @@ import { getTranslations } from "@/lib/i18n/translate";
 import { getSession, fetchCustomerOrders, buildOrdersContext, type ShopifyOrder } from "@/lib/shopify-auth";
 import { getUserRoles } from "@/lib/airtable";
 import { getFoldersForRoles } from "@/lib/role-access";
+import { chatRequestSchema } from "@/lib/api-schemas";
 
 export const maxDuration = 60;
 
@@ -22,7 +23,11 @@ function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T
 
 export async function POST(request: NextRequest) {
   try {
-    const { messages, lang: clientLang, flowContext } = await request.json();
+    const parsed = chatRequestSchema.safeParse(await request.json());
+    if (!parsed.success) {
+      return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+    }
+    const { messages, lang: clientLang, flowContext } = parsed.data;
 
     if (!process.env.GEMINI_API_KEY) {
       return NextResponse.json(
@@ -232,7 +237,7 @@ export async function POST(request: NextRequest) {
     // Build chat history
     // Only include binary file parts on the first message to avoid re-processing
     // scanned PDFs on every exchange. On follow-up messages, text context suffices.
-    const fileContextHistory: { role: string; parts: unknown[] }[] = [];
+    const fileContextHistory: Content[] = [];
     if (messages.length === 1 && binaryContext?.fileParts.length) {
       fileContextHistory.push({
         role: "user",
@@ -254,8 +259,8 @@ export async function POST(request: NextRequest) {
     // Convert user messages to Gemini format
     const allHistory = messages
       .slice(0, -1)
-      .map((msg: { role: string; content: string }) => ({
-        role: msg.role === "assistant" ? "model" : "user",
+      .map((msg) => ({
+        role: msg.role === "assistant" ? ("model" as const) : ("user" as const),
         parts: [{ text: msg.content }],
       }));
 

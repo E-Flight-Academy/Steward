@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Client } from "@notionhq/client";
+import { ratingSchema } from "@/lib/api-schemas";
 
 export async function POST(
   request: NextRequest,
@@ -15,14 +16,11 @@ export async function POST(
     }
 
     const { id } = await params;
-    const { rating } = await request.json();
-
-    if (!rating || !["👍", "👎"].includes(rating)) {
-      return NextResponse.json(
-        { error: "Invalid rating" },
-        { status: 400 }
-      );
+    const parsed = ratingSchema.safeParse(await request.json());
+    if (!parsed.success) {
+      return NextResponse.json({ error: "Invalid rating" }, { status: 400 });
     }
+    const { rating } = parsed.data;
 
     const notion = new Client({ auth: apiKey });
 

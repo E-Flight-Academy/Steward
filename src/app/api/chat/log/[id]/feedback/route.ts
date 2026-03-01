@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Client } from "@notionhq/client";
+import { feedbackSchema } from "@/lib/api-schemas";
 
 export async function POST(
   request: NextRequest,
@@ -15,14 +16,11 @@ export async function POST(
     }
 
     const { id } = await params;
-    const { feedback, contact } = await request.json();
-
-    if (!feedback && !contact) {
-      return NextResponse.json(
-        { error: "Invalid request: provide feedback or contact" },
-        { status: 400 }
-      );
+    const parsed = feedbackSchema.safeParse(await request.json());
+    if (!parsed.success) {
+      return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
     }
+    const { feedback, contact } = parsed.data;
 
     const notion = new Client({ auth: apiKey });
 

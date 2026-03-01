@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Client } from "@notionhq/client";
+import { chatLogSchema } from "@/lib/api-schemas";
 
 export async function POST(request: NextRequest) {
   try {
@@ -20,14 +21,11 @@ export async function POST(request: NextRequest) {
         { status: 500 }
       );
     }
-    const { question, answer, source, lang, sessionId } = await request.json();
-
-    if (!question) {
-      return NextResponse.json(
-        { error: "Question is required" },
-        { status: 400 }
-      );
+    const parsed = chatLogSchema.safeParse(await request.json());
+    if (!parsed.success) {
+      return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
     }
+    const { question, answer, source, lang, sessionId } = parsed.data;
 
     const notion = new Client({ auth: apiKey });
 
