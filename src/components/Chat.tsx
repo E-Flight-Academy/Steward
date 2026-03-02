@@ -55,16 +55,26 @@ export default function Chat() {
     scrollToBottom();
   }, [messages]);
 
-  // Scroll to bottom when on-screen keyboard opens/closes (iOS, Android)
+  // Resize container to visual viewport so input stays above iOS keyboard
+  const shellRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const vv = window.visualViewport;
     if (!vv) return;
-    const handleResize = () => {
+    const sync = () => {
+      if (shellRef.current) {
+        shellRef.current.style.height = `${vv.height}px`;
+        shellRef.current.style.top = `${vv.offsetTop}px`;
+      }
       window.scrollTo(0, 0);
       scrollToBottom();
     };
-    vv.addEventListener("resize", handleResize);
-    return () => vv.removeEventListener("resize", handleResize);
+    sync();
+    vv.addEventListener("resize", sync);
+    vv.addEventListener("scroll", sync);
+    return () => {
+      vv.removeEventListener("resize", sync);
+      vv.removeEventListener("scroll", sync);
+    };
   }, []);
 
   useEffect(() => {
@@ -602,7 +612,7 @@ export default function Chat() {
   }, [lang, sendMessage]);
 
   return (
-    <div className="flex flex-col h-dvh">
+    <div ref={shellRef} className="flex flex-col fixed left-0 right-0 top-0 h-screen">
       <ChatHeader
         client={client}
         lang={lang}
