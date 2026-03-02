@@ -99,7 +99,7 @@ export default function ChatInput({
             className={`w-12 h-12 shrink-0 flex items-center justify-center rounded-full cursor-pointer transition-colors ${
               isListening
                 ? "bg-red-500 text-white animate-mic-pulse"
-                : "bg-[#F7F7F7] text-e-grey hover:text-e-indigo hover:bg-[#F0F0FF] dark:bg-gray-800 dark:hover:bg-gray-700"
+                : "bg-e-mint-light text-e-grey hover:text-e-indigo hover:bg-e-mint dark:bg-gray-800 dark:hover:bg-gray-700"
             }`}
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
