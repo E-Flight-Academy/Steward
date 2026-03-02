@@ -61,12 +61,18 @@ export default function Chat() {
     const vv = window.visualViewport;
     if (!vv) return;
     const handleResize = () => {
+      // Reset any body scroll that iOS Safari may have caused
+      window.scrollTo(0, 0);
       const kbH = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
       setKeyboardHeight(kbH);
       scrollToBottom();
     };
     vv.addEventListener("resize", handleResize);
-    return () => vv.removeEventListener("resize", handleResize);
+    vv.addEventListener("scroll", handleResize);
+    return () => {
+      vv.removeEventListener("resize", handleResize);
+      vv.removeEventListener("scroll", handleResize);
+    };
   }, []);
 
   useEffect(() => {
