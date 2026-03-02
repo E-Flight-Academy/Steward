@@ -42,6 +42,8 @@ export interface UiLabels {
   "feedback.followUpDecline": string;
   "feedback.askContact": string;
   "feedback.contactSaved": string;
+  "chat.micStart": string;
+  "chat.micStop": string;
 }
 
 export const DEFAULT_LABELS: UiLabels = {
@@ -88,4 +90,6 @@ export const DEFAULT_LABELS: UiLabels = {
   "feedback.followUpDecline": "No problem! If you have any other questions, feel free to ask.",
   "feedback.askContact": "Please share your email address or phone number so we can reach you.",
   "feedback.contactSaved": "Thanks! We'll get back to you as soon as possible.",
+  "chat.micStart": "Start voice input",
+  "chat.micStop": "Stop voice input",
 };

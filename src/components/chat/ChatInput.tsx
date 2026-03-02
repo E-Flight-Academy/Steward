@@ -16,6 +16,11 @@ interface ChatInputProps {
   cyclingPlaceholders?: string[];
   phIndex?: number;
   phVisible?: boolean;
+  onMicClick?: () => void;
+  isListening?: boolean;
+  isMicSupported?: boolean;
+  micStartLabel?: string;
+  micStopLabel?: string;
 }
 
 export default function ChatInput({
@@ -34,6 +39,11 @@ export default function ChatInput({
   cyclingPlaceholders,
   phIndex,
   phVisible,
+  onMicClick,
+  isListening,
+  isMicSupported,
+  micStartLabel = "Start voice input",
+  micStopLabel = "Stop voice input",
 }: ChatInputProps) {
   const inputId = centered ? "message-input" : "message-input-bottom";
 
@@ -81,6 +91,24 @@ export default function ChatInput({
             </span>
           )}
         </div>
+        {isMicSupported && onMicClick && (
+          <button
+            type="button"
+            onClick={onMicClick}
+            aria-label={isListening ? micStopLabel : micStartLabel}
+            className={`w-12 h-12 shrink-0 flex items-center justify-center rounded-full cursor-pointer transition-colors ${
+              isListening
+                ? "bg-red-500 text-white animate-mic-pulse"
+                : "bg-[#F7F7F7] text-e-grey hover:text-e-indigo hover:bg-[#F0F0FF] dark:bg-gray-800 dark:hover:bg-gray-700"
+            }`}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
+              <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+              <line x1="12" y1="19" x2="12" y2="22" />
+            </svg>
+          </button>
+        )}
         <button
           type="submit"
           disabled={!input.trim()}

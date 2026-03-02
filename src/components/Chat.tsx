@@ -12,6 +12,7 @@ import { useKbStatus } from "@/hooks/useKbStatus";
 import { useFaqSuggestions } from "@/hooks/useFaqSuggestions";
 import { useRating } from "@/hooks/useRating";
 import { useFlow } from "@/hooks/useFlow";
+import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
 
 import ChatHeader from "./chat/ChatHeader";
 import WelcomeScreen from "./chat/WelcomeScreen";
@@ -606,6 +607,17 @@ export default function Chat() {
     autoResizeTextarea();
   }, [input, autoResizeTextarea]);
 
+  const { isListening, isSupported: isMicSupported, toggle: toggleMic } = useSpeechRecognition(
+    useCallback((text: string) => {
+      setInput(text);
+      setTimeout(() => autoResizeTextarea(), 0);
+    }, [autoResizeTextarea])
+  );
+
+  const handleMicClick = useCallback(() => {
+    toggleMic(lang);
+  }, [toggleMic, lang]);
+
   const handleAvatarClick = useCallback(() => {
     const question = lang === "nl" ? "Wie is Steward?" : lang === "de" ? "Wer ist Steward?" : "Who is Steward?";
     sendMessage(question);
@@ -662,6 +674,11 @@ export default function Chat() {
             cyclingPlaceholders={cyclingPlaceholders}
             phIndex={phIndex}
             phVisible={phVisible}
+            onMicClick={handleMicClick}
+            isListening={isListening}
+            isMicSupported={isMicSupported}
+            micStartLabel={t("chat.micStart")}
+            micStopLabel={t("chat.micStop")}
           />
         )}
 
@@ -705,6 +722,11 @@ export default function Chat() {
             inputRef={inputRef}
             autoResizeTextarea={autoResizeTextarea}
             onFaqSelect={(s) => sendMessage(s)}
+            onMicClick={handleMicClick}
+            isListening={isListening}
+            isMicSupported={isMicSupported}
+            micStartLabel={t("chat.micStart")}
+            micStopLabel={t("chat.micStop")}
           />
         </div>
       )}

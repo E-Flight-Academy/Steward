@@ -31,6 +31,11 @@ interface WelcomeScreenProps {
   cyclingPlaceholders: string[];
   phIndex: number;
   phVisible: boolean;
+  onMicClick?: () => void;
+  isListening?: boolean;
+  isMicSupported?: boolean;
+  micStartLabel?: string;
+  micStopLabel?: string;
 }
 
 export default function WelcomeScreen({
@@ -59,6 +64,11 @@ export default function WelcomeScreen({
   cyclingPlaceholders,
   phIndex,
   phVisible,
+  onMicClick,
+  isListening,
+  isMicSupported,
+  micStartLabel,
+  micStopLabel,
 }: WelcomeScreenProps) {
   return (
     <div className="w-full max-w-2xl px-1 sm:px-4 space-y-3 sm:space-y-6">
@@ -181,6 +191,11 @@ export default function WelcomeScreen({
         cyclingPlaceholders={cyclingPlaceholders}
         phIndex={phIndex}
         phVisible={phVisible}
+        onMicClick={onMicClick}
+        isListening={isListening}
+        isMicSupported={isMicSupported}
+        micStartLabel={micStartLabel}
+        micStopLabel={micStopLabel}
       />
     </div>
   );
