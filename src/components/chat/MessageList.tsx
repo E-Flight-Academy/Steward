@@ -13,6 +13,7 @@ interface MessageListProps {
   messages: Message[];
   onRate: (msgIndex: number, rating: "\u{1F44D}" | "\u{1F44E}", e?: React.MouseEvent) => void;
   onFaqClick: () => void;
+  onAvatarClick: () => void;
   flowPhase: string;
   currentFlowStep: FlowStep | null;
   isLoading: boolean;
@@ -33,6 +34,7 @@ export default function MessageList({
   messages,
   onRate,
   onFaqClick,
+  onAvatarClick,
   flowPhase,
   currentFlowStep,
   isLoading,
@@ -57,6 +59,7 @@ export default function MessageList({
           index={index}
           onRate={onRate}
           onFaqClick={onFaqClick}
+          onAvatarClick={onAvatarClick}
           t={t}
         />
       ))}

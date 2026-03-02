@@ -7,17 +7,20 @@ interface MessageBubbleProps {
   index: number;
   onRate: (msgIndex: number, rating: "\u{1F44D}" | "\u{1F44E}", e?: React.MouseEvent) => void;
   onFaqClick: () => void;
+  onAvatarClick: () => void;
   t: (key: keyof UiLabels) => string;
 }
 
-export default function MessageBubble({ message, index, onRate, onFaqClick, t }: MessageBubbleProps) {
+export default function MessageBubble({ message, index, onRate, onFaqClick, onAvatarClick, t }: MessageBubbleProps) {
   return (
     <div
       key={index}
       className={`flex max-w-4xl mx-auto w-full ${message.role === "user" ? "justify-end animate-slide-in-right" : "justify-start items-start gap-3 animate-slide-in-left"}`}
     >
       {message.role === "assistant" && (
-        <img src="/avatar.png" alt="Steward" className="w-8 h-8 rounded-full shrink-0 mt-0.5 transition-transform duration-200 hover:scale-150" />
+        <button onClick={onAvatarClick} aria-label="Who is Steward?" className="cursor-pointer shrink-0 mt-0.5">
+          <img src="/avatar.png" alt="Steward" className="w-8 h-8 rounded-full transition-transform duration-200 hover:scale-125" />
+        </button>
       )}
       {message.role === "user" ? (
         <div className="max-w-[70%] bg-[#1515F5] text-white px-4 py-3 rounded-2xl rounded-tr-sm">

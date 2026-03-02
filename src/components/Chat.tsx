@@ -595,6 +595,11 @@ export default function Chat() {
     autoResizeTextarea();
   }, [input, autoResizeTextarea]);
 
+  const handleAvatarClick = useCallback(() => {
+    const question = lang === "nl" ? "Wie is Steward?" : lang === "de" ? "Wer ist Steward?" : "Who is Steward?";
+    sendMessage(question);
+  }, [lang, sendMessage]);
+
   return (
     <div className="flex flex-col h-dvh">
       <ChatHeader
@@ -612,6 +617,7 @@ export default function Chat() {
         onNewChat={handleNewChat}
         onShare={handleShare}
         onFaqOpen={() => setShowFaqModal(true)}
+        onAvatarClick={handleAvatarClick}
         onLogin={handleShopifyLogin}
         onLogout={handleShopifyLogout}
         t={t}
@@ -652,6 +658,7 @@ export default function Chat() {
             messages={messages}
             onRate={rateMessage}
             onFaqClick={() => setShowFaqModal(true)}
+            onAvatarClick={handleAvatarClick}
             flowPhase={flowPhase}
             currentFlowStep={currentFlowStep}
             isLoading={isLoading}

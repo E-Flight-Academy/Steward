@@ -18,6 +18,7 @@ interface ChatHeaderProps {
   onFaqOpen: () => void;
   onLogin: () => void;
   onLogout: () => void;
+  onAvatarClick: () => void;
   t: (key: keyof UiLabels) => string;
 }
 
@@ -38,6 +39,7 @@ export default function ChatHeader({
   onFaqOpen,
   onLogin,
   onLogout,
+  onAvatarClick,
   t,
 }: ChatHeaderProps) {
   useEffect(() => {
@@ -54,13 +56,15 @@ export default function ChatHeader({
   return (
     <header className={`flex items-center ${client === "briefing" ? "justify-end" : "justify-between"} px-5 py-3 border-b border-[#E8E8F8] dark:border-gray-800 sticky top-0 z-50 bg-gradient-to-r from-white via-white to-[#F5F5FF] dark:from-gray-950 dark:via-gray-950 dark:to-gray-900`}>
       {client !== "briefing" && (
-        <button onClick={onNewChat} className="flex items-center gap-3 cursor-pointer group">
-          <img src="/avatar.png" alt="Steward" className="w-9 h-9 rounded-full ring-2 ring-[#1515F5]/15 group-hover:ring-[#1515F5]/30 transition-all" />
-          <div className="text-left">
+        <div className="flex items-center gap-3">
+          <button onClick={onAvatarClick} aria-label="Who is Steward?" className="cursor-pointer group">
+            <img src="/avatar.png" alt="Steward" className="w-9 h-9 rounded-full ring-2 ring-[#1515F5]/15 group-hover:ring-[#1515F5]/30 transition-all" />
+          </button>
+          <button onClick={onNewChat} className="text-left cursor-pointer">
             <h1 className="text-xl font-extrabold text-e-indigo leading-tight">Steward</h1>
             <p className="hidden min-[900px]:block text-xs text-e-grey leading-tight">E-Flight Academy Virtual Assistant</p>
-          </div>
-        </button>
+          </button>
+        </div>
       )}
       <div className="flex items-center gap-1 sm:gap-2">
         <button
