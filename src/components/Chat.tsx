@@ -708,7 +708,7 @@ export default function Chat() {
             isMicSupported={isMicSupported}
             micStartLabel={t("chat.micStart")}
             micStopLabel={t("chat.micStop")}
-            onTapAndTalk={isTouchDevice && client !== "briefing" ? handleTapAndTalk : undefined}
+            onTapAndTalk={isTouchDevice && client !== "briefing" && typeof window !== "undefined" && window.innerWidth >= 768 ? handleTapAndTalk : undefined}
             listeningLang={listeningLang}
           />
         )}
