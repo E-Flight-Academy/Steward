@@ -36,6 +36,8 @@ interface WelcomeScreenProps {
   isMicSupported?: boolean;
   micStartLabel?: string;
   micStopLabel?: string;
+  onTapAndTalk?: (lang: string) => void;
+  listeningLang?: string | null;
 }
 
 export default function WelcomeScreen({
@@ -69,6 +71,8 @@ export default function WelcomeScreen({
   isMicSupported,
   micStartLabel,
   micStopLabel,
+  onTapAndTalk,
+  listeningLang,
 }: WelcomeScreenProps) {
   return (
     <div className="w-full max-w-2xl px-1 sm:px-4 space-y-3 sm:space-y-6">
@@ -172,6 +176,37 @@ export default function WelcomeScreen({
               </button>
             )}
           </div>
+        </div>
+      )}
+
+      {/* Tap & Talk buttons for kiosk mode */}
+      {isMicSupported && onTapAndTalk && (
+        <div className="flex flex-col sm:flex-row gap-3 w-full max-w-[56rem] mx-auto px-2 sm:px-6 animate-fade-in-up">
+          {([
+            { lang: "en", label: "Speak English" },
+            { lang: "nl", label: "Spreek Nederlands" },
+            { lang: "de", label: "Spreche Deutsch" },
+          ] as const).map(({ lang, label }) => {
+            const active = isListening && listeningLang === lang;
+            return (
+              <button
+                key={lang}
+                onClick={() => onTapAndTalk(lang)}
+                className={`flex-1 flex items-center justify-center gap-3 px-5 py-4 rounded-2xl text-base font-medium cursor-pointer transition-all ${
+                  active
+                    ? "bg-red-500 text-white animate-mic-pulse"
+                    : "bg-e-mint-light text-foreground hover:bg-e-mint"
+                }`}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
+                  <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                  <line x1="12" y1="19" x2="12" y2="22" />
+                </svg>
+                {label}
+              </button>
+            );
+          })}
         </div>
       )}
 

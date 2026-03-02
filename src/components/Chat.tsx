@@ -614,9 +614,34 @@ export default function Chat() {
     }, [autoResizeTextarea])
   );
 
+  const [listeningLang, setListeningLang] = useState<string | null>(null);
+
+  // Reset listeningLang when speech recognition stops
+  useEffect(() => {
+    if (!isListening) setListeningLang(null);
+  }, [isListening]);
+
   const handleMicClick = useCallback(() => {
+    if (!isListening) setListeningLang(lang);
     toggleMic(lang);
-  }, [toggleMic, lang]);
+  }, [toggleMic, lang, isListening]);
+
+  const handleTapAndTalk = useCallback((tapLang: string) => {
+    // If already listening in this language, stop
+    if (isListening && listeningLang === tapLang) {
+      toggleMic(tapLang);
+      return;
+    }
+    // Switch language and start listening
+    if (tapLang !== lang) {
+      switchLanguage(tapLang);
+    }
+    setListeningLang(tapLang);
+    // Small delay if already listening (to stop first), then start
+    setTimeout(() => {
+      toggleMic(tapLang);
+    }, isListening ? 200 : 0);
+  }, [isListening, listeningLang, lang, switchLanguage, toggleMic]);
 
   const handleAvatarClick = useCallback(() => {
     const question = lang === "nl" ? "Wie is Steward?" : lang === "de" ? "Wer ist Steward?" : "Who is Steward?";
@@ -679,6 +704,8 @@ export default function Chat() {
             isMicSupported={isMicSupported}
             micStartLabel={t("chat.micStart")}
             micStopLabel={t("chat.micStop")}
+            onTapAndTalk={handleTapAndTalk}
+            listeningLang={listeningLang}
           />
         )}
 
