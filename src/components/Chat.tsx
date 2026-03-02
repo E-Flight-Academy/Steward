@@ -55,24 +55,16 @@ export default function Chat() {
     scrollToBottom();
   }, [messages]);
 
-  // Track on-screen keyboard height via visualViewport (iOS, Android)
-  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  // Scroll to bottom when on-screen keyboard opens/closes (iOS, Android)
   useEffect(() => {
     const vv = window.visualViewport;
     if (!vv) return;
     const handleResize = () => {
-      // Reset any body scroll that iOS Safari may have caused
       window.scrollTo(0, 0);
-      const kbH = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
-      setKeyboardHeight(kbH);
       scrollToBottom();
     };
     vv.addEventListener("resize", handleResize);
-    vv.addEventListener("scroll", handleResize);
-    return () => {
-      vv.removeEventListener("resize", handleResize);
-      vv.removeEventListener("scroll", handleResize);
-    };
+    return () => vv.removeEventListener("resize", handleResize);
   }, []);
 
   useEffect(() => {
@@ -610,7 +602,7 @@ export default function Chat() {
   }, [lang, sendMessage]);
 
   return (
-    <div className="flex flex-col fixed top-0 left-0 right-0" style={{ bottom: `${keyboardHeight}px` }}>
+    <div className="flex flex-col h-dvh">
       <ChatHeader
         client={client}
         lang={lang}
