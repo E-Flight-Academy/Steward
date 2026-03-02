@@ -111,7 +111,7 @@ export default function WelcomeScreen({
             <img src="/avatar.png" alt="Steward" className="w-8 h-8 rounded-full transition-transform duration-200 hover:scale-125" />
           </button>
           <div className="max-w-[85%] bg-white dark:bg-gray-900 px-4 py-3 rounded-2xl rounded-tl-sm text-foreground">
-            <div className="prose dark:prose-invert max-w-none prose-p:my-1 prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5 prose-headings:my-2 prose-headings:text-e-indigo">
+            <div className={`prose dark:prose-invert max-w-none prose-p:my-1 prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5 prose-headings:my-2 prose-headings:text-e-indigo ${kiosk ? "prose-xl" : ""}`}>
               <ReactMarkdown components={{ a: ({ href, children }) => <a href={href} target="_blank" rel="noopener noreferrer" className="text-e-indigo underline hover:text-e-indigo-hover">{children}</a> }}>{message.content}</ReactMarkdown>
             </div>
           </div>
@@ -124,6 +124,7 @@ export default function WelcomeScreen({
             options={currentFlowStep.nextDialogFlow || []}
             onSelect={handleFlowOption}
             getFlowLabel={getFlowLabel}
+            kiosk={kiosk}
           />
         </div>
       )}

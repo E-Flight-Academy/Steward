@@ -73,6 +73,7 @@ export default function MessageList({
             options={currentFlowStep.nextDialogFlow || []}
             onSelect={handleFlowOption}
             getFlowLabel={getFlowLabel}
+            kiosk={kiosk}
           />
         </div>
       )}
