@@ -55,6 +55,17 @@ export default function Chat() {
     scrollToBottom();
   }, [messages]);
 
+  // Scroll to bottom when on-screen keyboard opens/closes (iOS, Android)
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const handleResize = () => {
+      scrollToBottom();
+    };
+    vv.addEventListener("resize", handleResize);
+    return () => vv.removeEventListener("resize", handleResize);
+  }, []);
+
   useEffect(() => {
     if (!isLoading) {
       setTimeout(() => inputRef.current?.focus(), 50);
@@ -585,7 +596,7 @@ export default function Chat() {
   }, [input, autoResizeTextarea]);
 
   return (
-    <div className="flex flex-col h-screen">
+    <div className="flex flex-col h-dvh">
       <ChatHeader
         client={client}
         lang={lang}

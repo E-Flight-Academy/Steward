@@ -52,16 +52,22 @@ export default function ChatHeader({
   }, [langOpen, userMenuOpen, setLangOpen, setUserMenuOpen]);
 
   return (
-    <header className={`flex items-center ${client === "briefing" ? "justify-end" : "justify-between"} p-4 border-b border-e-pale dark:border-gray-800 sticky top-0 z-50 bg-white dark:bg-gray-950`}>
-      {client !== "briefing" && <div>
-        <h1 className="text-2xl font-extrabold text-e-indigo cursor-pointer" onClick={onNewChat}>Steward <span className="hidden min-[900px]:inline text-sm font-normal text-e-grey">E-Flight Academy Virtual Assistant</span></h1>
-      </div>}
-      <div className="flex items-center gap-4">
+    <header className={`flex items-center ${client === "briefing" ? "justify-end" : "justify-between"} px-5 py-3 border-b border-[#E8E8F8] dark:border-gray-800 sticky top-0 z-50 bg-gradient-to-r from-white via-white to-[#F5F5FF] dark:from-gray-950 dark:via-gray-950 dark:to-gray-900`}>
+      {client !== "briefing" && (
+        <button onClick={onNewChat} className="flex items-center gap-3 cursor-pointer group">
+          <img src="/avatar.png" alt="Steward" className="w-9 h-9 rounded-full ring-2 ring-[#1515F5]/15 group-hover:ring-[#1515F5]/30 transition-all" />
+          <div className="text-left">
+            <h1 className="text-xl font-extrabold text-e-indigo leading-tight">Steward</h1>
+            <p className="hidden min-[900px]:block text-xs text-e-grey leading-tight">E-Flight Academy Virtual Assistant</p>
+          </div>
+        </button>
+      )}
+      <div className="flex items-center gap-1 sm:gap-2">
         <button
           onClick={onFaqOpen}
           title="FAQ"
           aria-label="Open FAQ"
-          className="flex items-center gap-2 text-e-grey hover:text-e-indigo transition-colors cursor-pointer"
+          className="flex items-center gap-2 p-2 rounded-xl text-e-grey hover:text-e-indigo hover:bg-[#F0F0FF] transition-colors cursor-pointer"
         >
           <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="12" cy="12" r="10" />
@@ -107,7 +113,7 @@ export default function ChatHeader({
           disabled={messagesLength === 0}
           title={t("header.newChat")}
           aria-label="New chat"
-          className="flex items-center gap-2 text-e-grey hover:text-e-indigo transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+          className="flex items-center gap-2 p-2 rounded-xl text-e-grey hover:text-e-indigo hover:bg-[#F0F0FF] transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent"
         >
           <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
@@ -122,7 +128,7 @@ export default function ChatHeader({
           disabled={messagesLength === 0 || shareStatus === "sharing"}
           title={shareStatus === "copied" ? "Link copied!" : shareStatus === "error" ? "Failed to share" : t("header.share")}
           aria-label="Share chat"
-          className="flex items-center gap-2 text-e-grey hover:text-e-indigo transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+          className="flex items-center gap-2 p-2 rounded-xl text-e-grey hover:text-e-indigo hover:bg-[#F0F0FF] transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent"
         >
           {shareStatus === "copied" ? (
             <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-emerald-500">
@@ -152,7 +158,7 @@ export default function ChatHeader({
               onClick={() => setUserMenuOpen(!userMenuOpen)}
               aria-label="User menu"
               aria-expanded={userMenuOpen}
-              className="flex items-center gap-2 text-e-grey hover:text-e-indigo transition-colors cursor-pointer"
+              className="flex items-center gap-2 p-2 rounded-xl text-e-grey hover:text-e-indigo hover:bg-[#F0F0FF] transition-colors cursor-pointer"
             >
               <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
@@ -208,7 +214,7 @@ export default function ChatHeader({
             onClick={onLogin}
             title={t("header.login")}
             aria-label="Login"
-            className="flex items-center gap-2 text-e-grey hover:text-e-indigo transition-colors cursor-pointer"
+            className="flex items-center gap-2 p-2 rounded-xl text-e-grey hover:text-e-indigo hover:bg-[#F0F0FF] transition-colors cursor-pointer"
           >
             <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
