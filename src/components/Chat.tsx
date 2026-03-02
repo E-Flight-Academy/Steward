@@ -504,6 +504,7 @@ export default function Chat() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim()) return;
+    if (isListening) stopListening();
     setSendAnimating(true);
     setTimeout(() => setSendAnimating(false), 400);
     sendMessage(input);
@@ -612,7 +613,7 @@ export default function Chat() {
     autoResizeTextarea();
   }, [input, autoResizeTextarea]);
 
-  const { isListening, isSupported: isMicSupported, toggle: toggleMic } = useSpeechRecognition(
+  const { isListening, isSupported: isMicSupported, toggle: toggleMic, stopListening } = useSpeechRecognition(
     useCallback((text: string) => {
       setInput(text);
       setTimeout(() => autoResizeTextarea(), 0);
@@ -676,7 +677,7 @@ export default function Chat() {
         t={t}
       />
 
-      <div className={`flex-1 overflow-y-auto p-2 sm:p-4 bg-gradient-to-b from-[#EFEFEF] to-[#F7F7F7] dark:from-gray-950 dark:to-gray-900 ${hasUserMessages ? "space-y-6" : `flex flex-col items-center ${client === "briefing" ? "justify-end pb-4" : "justify-center"}`}`}>
+      <div className={`flex-1 overflow-y-auto p-2 sm:p-4 bg-gradient-to-b from-[#EFEFEF] to-[#F7F7F7] dark:from-gray-950 dark:to-gray-900 ${hasUserMessages ? "space-y-6" : `flex flex-col items-center ${client === "briefing" ? "justify-end pb-4" : isKiosk ? "justify-start pt-6" : "justify-center"}`}`}>
         {!hasUserMessages && (
           <WelcomeScreen
             flowPhase={flowPhase}
@@ -742,7 +743,7 @@ export default function Chat() {
         {!hasUserMessages && <div ref={messagesEndRef} />}
       </div>
 
-      {hasUserMessages && (
+      {(hasUserMessages || isKiosk) && (
         <div className="border-t border-e-pale dark:border-gray-800 relative">
           <ChatInput
             input={input}

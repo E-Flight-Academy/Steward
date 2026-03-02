@@ -212,8 +212,8 @@ export default function WelcomeScreen({
         </div>
       )}
 
-      {/* Centered input with FAQ suggestions */}
-      <ChatInput
+      {/* Centered input with FAQ suggestions (hidden in kiosk, shown at bottom instead) */}
+      {!kiosk && <ChatInput
         input={input}
         setInput={setInput}
         onSubmit={onSubmit}
@@ -234,7 +234,7 @@ export default function WelcomeScreen({
         micStartLabel={micStartLabel}
         micStopLabel={micStopLabel}
         kiosk={kiosk}
-      />
+      />}
     </div>
   );
 }
