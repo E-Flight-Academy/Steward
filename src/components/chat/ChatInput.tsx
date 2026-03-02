@@ -42,7 +42,7 @@ export default function ChatInput({
       <div className="flex gap-2 items-end">
         <div className="relative flex-1 flex flex-col">
           {faqSuggestions.length > 0 && (
-            <div role="listbox" className="bg-white dark:bg-gray-900 border border-[#ECECEC] dark:border-gray-700 border-b-0 rounded-t-2xl overflow-y-auto max-h-64">
+            <div role="listbox" className="absolute bottom-full left-0 right-0 z-10 bg-white dark:bg-gray-900 border border-[#ECECEC] dark:border-gray-700 border-b-0 rounded-t-2xl overflow-y-auto max-h-64">
               {faqSuggestions.map((suggestion, i) => (
                 <button
                   key={i}
