@@ -243,6 +243,7 @@ export default function Chat() {
     apply: applyAdmin,
     cancel: cancelAdmin,
     revise: reviseAdmin,
+    reset: resetAdmin,
     handleAdminInput,
   } = useFaqAdmin({ faqs, setFaqs, setMessages, lang });
 
@@ -548,6 +549,7 @@ export default function Chat() {
   };
 
   const handleNewChat = () => {
+    resetAdmin();
     handleNewChatFlow(inputRef, setInput);
   };
 
