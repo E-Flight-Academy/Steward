@@ -1,0 +1,41 @@
+name: Deploy to Scaleway
+
+on:
+  push:
+    branches: [main]
+
+env:
+  REGISTRY: rg.nl-ams.scw.cloud
+  IMAGE: steward/steward
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Login to Scaleway Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: nologin
+          password: ${{ secrets.SCW_SECRET_KEY }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE }}:latest
+            ${{ env.REGISTRY }}/${{ env.IMAGE }}:${{ github.sha }}
+
+      - name: Deploy to Serverless Container
+        if: ${{ vars.SCW_CONTAINER_ID != '' }}
+        run: |
+          curl -s -X PATCH \
+            -H "X-Auth-Token: ${{ secrets.SCW_SECRET_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{"redeploy": true}' \
+            "https://api.scaleway.com/containers/v1beta1/regions/nl-ams/containers/${{ vars.SCW_CONTAINER_ID }}"
