@@ -46,7 +46,7 @@ export default function MessageBubble({ message, index, onRate, onFaqClick, onAv
         return (
           <div className="max-w-[85%] group/msg">
           <div className="bg-white dark:bg-gray-900 px-4 py-3 rounded-2xl rounded-tl-sm text-foreground">
-            <div className={`prose dark:prose-invert max-w-none prose-p:my-1 prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5 prose-headings:my-2 prose-headings:text-e-indigo ${kiosk ? "prose-xl" : ""}`}>
+            <div className={`prose dark:prose-invert max-w-none prose-p:my-1 prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5 prose-headings:my-2 prose-headings:text-e-indigo ${kiosk ? "prose-xl" : ""} ${body.split("\n").length > 25 ? "max-h-[50vh] overflow-y-auto" : ""}`}>
               <ReactMarkdown components={{ a: ({ href, children }) => <a href={href} target="_blank" rel="noopener noreferrer" className="text-e-indigo underline hover:text-e-indigo-hover">{children}</a> }}>{body}</ReactMarkdown>
             </div>
             {inlineLinks.length > 0 && (

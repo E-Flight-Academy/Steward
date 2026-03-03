@@ -77,6 +77,7 @@ export interface KvWebsiteData {
 }
 
 export interface KvFaq {
+  notionPageId?: string;
   question: string;
   questionNl: string;
   questionDe: string;

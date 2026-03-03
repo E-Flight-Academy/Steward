@@ -107,3 +107,9 @@ h1, h2 {
   100% { transform: scale(1); }
 }
 .animate-send-pulse { animation: send-pulse 0.4s ease-out; }
+
+textarea::placeholder {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

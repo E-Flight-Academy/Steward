@@ -13,6 +13,7 @@ import { useFaqSuggestions } from "@/hooks/useFaqSuggestions";
 import { useRating } from "@/hooks/useRating";
 import { useFlow } from "@/hooks/useFlow";
 import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
+import { useFaqAdmin } from "@/hooks/useFaqAdmin";
 
 import ChatHeader from "./chat/ChatHeader";
 import WelcomeScreen from "./chat/WelcomeScreen";
@@ -65,13 +66,18 @@ export default function Chat() {
   useEffect(() => {
     const vv = window.visualViewport;
     if (!vv) return;
+    let prevHeight = vv.height;
     const sync = () => {
       if (shellRef.current) {
         shellRef.current.style.height = `${vv.height}px`;
         shellRef.current.style.top = `${vv.offsetTop}px`;
       }
-      window.scrollTo(0, 0);
-      scrollToBottom();
+      // Only force scroll when viewport shrinks (keyboard opening)
+      if (vv.height < prevHeight) {
+        window.scrollTo(0, 0);
+        scrollToBottom();
+      }
+      prevHeight = vv.height;
     };
     sync();
     vv.addEventListener("resize", sync);
@@ -166,7 +172,7 @@ export default function Chat() {
     fetch("/api/chat/log", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question, answer, source, lang, sessionId }),
+      body: JSON.stringify({ question, answer, source, lang, sessionId, email: shopifyUser?.email }),
     })
       .then((res) => res.ok ? res.json() : null)
       .then((data) => {
@@ -181,7 +187,7 @@ export default function Chat() {
         }
       })
       .catch(() => {});
-  }, [lang, sessionId]);
+  }, [lang, sessionId, shopifyUser?.email]);
 
   // sendMessage must be declared before useFlow (which needs it as a parameter)
   // We use a ref to break the circular dependency
@@ -225,8 +231,32 @@ export default function Chat() {
     rateMessage,
   } = useRating(messages, setMessages, lang, sessionId, t);
 
+  const adminEmails = ["matthijs@eflight.nl", "matthijscollard@gmail.com", "wesley@eflight.nl", "paulien@eflight.nl"];
+  const isAdmin = !!shopifyUser?.email && adminEmails.includes(shopifyUser.email);
+
+  const {
+    phase: adminPhase,
+    categories: adminCategories,
+    startAdmin,
+    chooseAction,
+    apply: applyAdmin,
+    cancel: cancelAdmin,
+    revise: reviseAdmin,
+    handleAdminInput,
+  } = useFaqAdmin({ faqs, setFaqs, setMessages, lang });
+
   const sendMessage = useCallback(async (text: string, baseMessages?: Message[], hidden = false) => {
     if (!text.trim()) return;
+
+    // Intercept for FAQ admin flow
+    if (adminPhase !== "idle" && !hidden) {
+      const handled = handleAdminInput(text);
+      if (handled) {
+        setInput("");
+        return;
+      }
+    }
+
     setFollowUpSuggestions([]);
 
     const exitFeedback = (pendingFeedbackLogId || feedbackContactLogId) && faqSuggestions.some((s) => s === text);
@@ -399,7 +429,7 @@ export default function Chat() {
       fetchKbStatus();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [messages, flowPhase, flowContext, pendingFeedbackLogId, feedbackContactLogId, faqSuggestions, lang, sessionId, t, setTranslations, resetLanguage, fetchKbStatus, showWithThinkingDelay, logChat, setFlowPhase, setCurrentFlowStep, setPendingFeedbackLogId, setFeedbackContactLogId, setFeedbackFollowUpLogId]);
+  }, [messages, flowPhase, flowContext, pendingFeedbackLogId, feedbackContactLogId, faqSuggestions, lang, sessionId, t, setTranslations, resetLanguage, fetchKbStatus, showWithThinkingDelay, logChat, setFlowPhase, setCurrentFlowStep, setPendingFeedbackLogId, setFeedbackContactLogId, setFeedbackFollowUpLogId, adminPhase, handleAdminInput]);
 
   // Keep the ref in sync
   sendMessageRef.current = sendMessage;
@@ -544,7 +574,7 @@ export default function Chat() {
   };
 
   const isKiosk = client === "kiosk";
-  const hasUserMessages = useMemo(() => messages.some((m) => m.role === "user"), [messages]);
+  const hasUserMessages = useMemo(() => messages.some((m) => m.role === "user") || (isAdmin && adminPhase !== "idle"), [messages, isAdmin, adminPhase]);
 
   const displayRole = useMemo(() => {
     if (userRoles.length === 0) return t("header.role.visitor");
@@ -675,6 +705,8 @@ export default function Chat() {
         onAvatarClick={handleAvatarClick}
         onLogin={handleShopifyLogin}
         onLogout={handleShopifyLogout}
+        isAdmin={isAdmin}
+        onFaqAdmin={startAdmin}
         t={t}
       />
 
@@ -696,7 +728,7 @@ export default function Chat() {
             input={input}
             setInput={setInput}
             onSubmit={handleSubmit}
-            faqSuggestions={faqSuggestions}
+            faqSuggestions={adminPhase !== "idle" ? [] : faqSuggestions}
             selectedSuggestion={selectedSuggestion}
             onKeyDown={handleInputKeyDown}
             sendAnimating={sendAnimating}
@@ -708,7 +740,7 @@ export default function Chat() {
             phVisible={phVisible}
             onMicClick={handleMicClick}
             isListening={isListening}
-            isMicSupported={isMicSupported}
+            isMicSupported={client !== "briefing" && isMicSupported}
             micStartLabel={t("chat.micStart")}
             micStopLabel={t("chat.micStop")}
             onTapAndTalk={isKiosk || (isTouchDevice && client !== "briefing" && typeof window !== "undefined" && window.innerWidth >= 768) ? handleTapAndTalk : undefined}
@@ -738,6 +770,14 @@ export default function Chat() {
             t={t}
             messagesEndRef={messagesEndRef}
             kiosk={isKiosk}
+            adminPhase={isAdmin ? adminPhase : undefined}
+            onAdminAction={isAdmin ? chooseAction : undefined}
+            onAdminApply={isAdmin ? applyAdmin : undefined}
+            onAdminCancel={isAdmin ? cancelAdmin : undefined}
+            onAdminRevise={isAdmin ? reviseAdmin : undefined}
+            onAdminInput={isAdmin ? (text: string) => { handleAdminInput(text); } : undefined}
+            adminCategories={isAdmin ? adminCategories : undefined}
+            lang={lang}
           />
         )}
 
@@ -750,7 +790,7 @@ export default function Chat() {
             input={input}
             setInput={setInput}
             onSubmit={handleSubmit}
-            faqSuggestions={faqSuggestions}
+            faqSuggestions={adminPhase !== "idle" ? [] : faqSuggestions}
             selectedSuggestion={selectedSuggestion}
             onKeyDown={handleInputKeyDown}
             sendAnimating={sendAnimating}
@@ -760,7 +800,7 @@ export default function Chat() {
             onFaqSelect={(s) => sendMessage(s)}
             onMicClick={handleMicClick}
             isListening={isListening}
-            isMicSupported={isMicSupported}
+            isMicSupported={client !== "briefing" && isMicSupported}
             micStartLabel={t("chat.micStart")}
             micStopLabel={t("chat.micStop")}
             kiosk={isKiosk}

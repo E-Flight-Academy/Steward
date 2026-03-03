@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
     if (!parsed.success) {
       return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
     }
-    const { question, answer, source, lang, sessionId } = parsed.data;
+    const { question, answer, source, lang, sessionId, email } = parsed.data;
 
     const notion = new Client({ auth: apiKey });
 
@@ -53,6 +53,11 @@ export async function POST(request: NextRequest) {
         ...(clientIp ? {
           IPaddress: {
             rich_text: [{ text: { content: clientIp } }],
+          },
+        } : {}),
+        ...(email ? {
+          Contact: {
+            rich_text: [{ text: { content: email } }],
           },
         } : {}),
       },

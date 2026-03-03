@@ -111,7 +111,7 @@ export async function fetchFaqsFromNotion(): Promise<KvFaq[]> {
 
     // Include if at least one Q+A pair exists
     if (question && (answer || answerNl || answerDe)) {
-      faqs.push({ question, questionNl, questionDe, answer, answerNl, answerDe, category, audience, url });
+      faqs.push({ notionPageId: page.id, question, questionNl, questionDe, answer, answerNl, answerDe, category, audience, url });
     }
   }
 
