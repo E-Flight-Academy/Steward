@@ -24,6 +24,7 @@ function getVersion(): string {
 }
 
 const nextConfig: NextConfig = {
+  output: "standalone",
   env: {
     NEXT_PUBLIC_BUILD_ID: getBuildId(),
     NEXT_PUBLIC_VERSION: getVersion(),
