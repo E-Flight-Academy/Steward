@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useRef } from "react";
 
 export function useFaqSuggestions(
   input: string,
-  faqs: { question: string; questionNl: string; questionDe: string; answer: string; answerNl: string; answerDe: string; category: string; audience: string[]; url: string }[],
+  faqs: { question: string; questionNl: string; questionDe: string; answer: string; answerNl: string; answerDe: string; category: string[]; audience: string[]; url: string }[],
   starters: { question: string; questionNl: string; questionDe: string; answer: string; answerNl: string; answerDe: string }[],
   getQ: (item: { question: string; questionNl: string; questionDe: string }) => string
 ) {
