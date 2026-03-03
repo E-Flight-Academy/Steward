@@ -214,10 +214,10 @@ export function useFaqAdmin({ faqs, setFaqs, setMessages, lang }: UseFaqAdminOpt
     setMessages((prev) => [
       ...prev,
       { role: "assistant", content: lang === "nl"
-        ? "Wat is de doelgroep? (kies één of typ meerdere, gescheiden door komma's)"
+        ? "Wat is de doelgroep? (kies één of meer)"
         : lang === "de"
-        ? "Was ist die Zielgruppe? (wähle eine oder tippe mehrere, durch Kommas getrennt)"
-        : "What is the audience? (choose one or type multiple, separated by commas)" },
+        ? "Was ist die Zielgruppe? (wähle eine oder mehrere)"
+        : "What is the audience? (choose one or more)" },
     ]);
   }, [setMessages, lang]);
 
