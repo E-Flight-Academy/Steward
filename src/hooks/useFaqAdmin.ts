@@ -299,9 +299,9 @@ export function useFaqAdmin({ faqs, setFaqs, setMessages, lang }: UseFaqAdminOpt
           answer: translations.answer_en,
           answerNl: translations.answer_nl,
           answerDe: translations.answer_de,
-          category: draftCategory || selectedFaq.category,
-          audience: draftAudience.length > 0 ? draftAudience : selectedFaq.audience,
-          url: draftUrl || selectedFaq.url,
+          category: draftCategory,
+          audience: draftAudience,
+          url: draftUrl,
         };
       } else if (action === "add" && translations) {
         body = {
