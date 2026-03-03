@@ -12,7 +12,7 @@ interface WelcomeScreenProps {
   handleFlowOption: (stepName: string, displayLabel: string) => void;
   getFlowLabel: (option: FlowOption) => string;
   starters: { question: string; questionNl: string; questionDe: string; answer: string; answerNl: string; answerDe: string }[];
-  faqs: { question: string; questionNl: string; questionDe: string; answer: string; answerNl: string; answerDe: string; category: string; audience: string[]; url: string }[];
+  faqs: { question: string; questionNl: string; questionDe: string; answer: string; answerNl: string; answerDe: string; category: string[]; audience: string[]; url: string }[];
   getQ: (item: { question: string; questionNl: string; questionDe: string }) => string;
   sendMessage: (text: string) => void;
   onFaqOpen: () => void;

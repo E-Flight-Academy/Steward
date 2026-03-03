@@ -9,7 +9,7 @@ interface Faq {
   answer: string;
   answerNl: string;
   answerDe: string;
-  category: string;
+  category: string[];
   audience: string[];
 }
 
