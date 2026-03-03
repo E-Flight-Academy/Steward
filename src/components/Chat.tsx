@@ -774,7 +774,7 @@ export default function Chat() {
             messagesEndRef={messagesEndRef}
             kiosk={isKiosk}
             adminPhase={isAdmin ? adminPhase : undefined}
-            onAdminAction={isAdmin ? chooseAction : undefined}
+            onAdminAction={isAdmin ? (a) => { chooseAction(a); setTimeout(() => inputRef.current?.focus(), 50); } : undefined}
             onAdminApply={isAdmin ? applyAdmin : undefined}
             onAdminCancel={isAdmin ? cancelAdmin : undefined}
             onAdminRevise={isAdmin ? reviseAdmin : undefined}
