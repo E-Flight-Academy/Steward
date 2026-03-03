@@ -270,7 +270,7 @@ export function useFaqAdmin({ faqs, setFaqs, setMessages, lang }: UseFaqAdminOpt
 
       const result = await res.json();
 
-      const faqRes = await fetch("/api/faqs");
+      const faqRes = await fetch("/api/faqs?fresh=true");
       if (faqRes.ok) {
         const updatedFaqs = await faqRes.json();
         setFaqs(updatedFaqs);

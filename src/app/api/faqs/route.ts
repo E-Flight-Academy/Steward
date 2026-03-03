@@ -1,9 +1,10 @@
-import { NextResponse } from "next/server";
-import { getFaqs } from "@/lib/faq";
+import { NextRequest, NextResponse } from "next/server";
+import { getFaqs, syncFaqs } from "@/lib/faq";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const faqs = await getFaqs();
+    const fresh = request.nextUrl.searchParams.get("fresh") === "true";
+    const faqs = fresh ? await syncFaqs() : await getFaqs();
     return NextResponse.json(faqs);
   } catch (err) {
     console.error("Failed to fetch FAQs:", err);
