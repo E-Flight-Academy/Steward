@@ -443,30 +443,8 @@ export async function POST(request: NextRequest) {
             }
           }
 
-          // Final check: if the response matches a FAQ with a URL, prefer that over Website source
-          if (faqs.length > 0) {
-            const cleanText = fullText.replace(/\[source:[^\]]*\]/gi, "").toLowerCase();
-            const cleanWords = cleanText.split(/\s+/).filter(w => w.length > 4);
-            let bestFaqMatch = null;
-            let bestFaqScore = 0;
-            for (const f of faqs) {
-              if (!f.url) continue;
-              const answerWords = new Set(
-                [f.answer, f.answerNl, f.answerDe].join(" ").toLowerCase().split(/\s+/).filter(w => w.length > 4)
-              );
-              let score = 0;
-              for (const w of cleanWords) { if (answerWords.has(w)) score++; }
-              // Normalize by answer length to prefer specific matches
-              const normalized = answerWords.size > 0 ? score / Math.sqrt(answerWords.size) : 0;
-              if (normalized > bestFaqScore) { bestFaqScore = normalized; bestFaqMatch = f; }
-            }
-            // If strong FAQ match with URL, override any Website source
-            if (bestFaqMatch && bestFaqScore > 2) {
-              sourceUrl = bestFaqMatch.url;
-              sourceTitle = bestFaqMatch.question;
-              processedSource = `[source: FAQ | ${bestFaqMatch.url} | ${bestFaqMatch.question}]`;
-            }
-          }
+          // Removed: aggressive FAQ word-matching override that incorrectly
+          // re-attributed Knowledge Base / General Knowledge answers as FAQ
 
           // Resolve language detection and translations
           const detectedLang = await langPromise;
