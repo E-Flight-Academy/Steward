@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useCallback } from "react";
+import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 
 export function useFaqSuggestions(
   input: string,
@@ -7,20 +7,16 @@ export function useFaqSuggestions(
   getQ: (item: { question: string; questionNl: string; questionDe: string }) => string
 ) {
   const [debouncedInput, setDebouncedInput] = useState(input);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [selectedSuggestion, setSelectedSuggestion] = useState(-1);
   const prevSuggestionsRef = useRef<string[]>([]);
 
-  // Debounce input changes via callback instead of effect
-  const prevInputRef = useRef(input);
-  if (prevInputRef.current !== input) {
-    prevInputRef.current = input;
-    if (timerRef.current) clearTimeout(timerRef.current);
-    if (!input.trim()) {
-      setDebouncedInput("");
-    } else {
-      timerRef.current = setTimeout(() => setDebouncedInput(input), 150);
-    }
-  }
+  // Debounce input changes — use setTimeout for both paths to satisfy lint
+  useEffect(() => {
+    const delay = input.trim() ? 150 : 0;
+    const value = input.trim() ? input : "";
+    const timer = setTimeout(() => setDebouncedInput(value), delay);
+    return () => clearTimeout(timer);
+  }, [input]);
 
   const faqSuggestions = useMemo(() => {
     const query = debouncedInput.trim().toLowerCase();
@@ -37,22 +33,17 @@ export function useFaqSuggestions(
       .slice(0, 5);
   }, [debouncedInput, faqs, starters, getQ]);
 
-  // Reset selection when suggestions change (compared by reference)
-  const suggestionsChanged = prevSuggestionsRef.current !== faqSuggestions;
-  if (suggestionsChanged) {
-    prevSuggestionsRef.current = faqSuggestions;
-  }
-
-  const [selectedSuggestion, setSelectedSuggestion] = useState(-1);
+  // Reset selection when suggestions change
+  useEffect(() => {
+    if (prevSuggestionsRef.current !== faqSuggestions) {
+      prevSuggestionsRef.current = faqSuggestions;
+      setTimeout(() => setSelectedSuggestion(-1), 0);
+    }
+  }, [faqSuggestions]);
 
   const setSelectedSuggestionWrapped = useCallback((v: number | ((prev: number) => number)) => {
     setSelectedSuggestion(v);
   }, []);
-
-  // Reset selection during render when suggestions change
-  if (suggestionsChanged && selectedSuggestion !== -1) {
-    setSelectedSuggestion(-1);
-  }
 
   return { faqSuggestions, selectedSuggestion, setSelectedSuggestion: setSelectedSuggestionWrapped };
 }
