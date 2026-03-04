@@ -216,7 +216,7 @@ export async function getKnowledgeBaseStatus() {
   // L2: KV
   try {
     const kvStatus = await getKvStatus();
-    if (kvStatus) return { ...kvStatus, faqCount: kvStatus.faqCount ?? faqCount, websitePageCount };
+    if (kvStatus) return { ...kvStatus, faqCount: kvStatus.faqCount ?? faqCount, websitePageCount: kvStatus.websitePageCount ?? websitePageCount };
   } catch {
     // Fall through
   }

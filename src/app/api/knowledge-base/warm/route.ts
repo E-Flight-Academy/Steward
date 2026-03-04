@@ -67,7 +67,21 @@ async function warmUp(force: boolean = false) {
         return [];
       }),
     ]);
-    // getDocumentContext already writes "synced" status to KV
+    // Update KV status with all counts (getDocumentContext writes "synced"
+    // early, but without FAQ/website counts — overwrite with full data)
+    try {
+      await setKvStatus({
+        status: "synced",
+        fileCount: context.fileNames.length,
+        fileNames: context.fileNames,
+        lastSynced: new Date().toISOString(),
+        faqCount: faqs.length,
+        websitePageCount: websitePages.length,
+      });
+    } catch {
+      // Non-fatal
+    }
+
     return NextResponse.json({
       status: "ready",
       fileCount: context.fileNames.length,

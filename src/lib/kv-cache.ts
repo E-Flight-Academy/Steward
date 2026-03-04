@@ -54,6 +54,7 @@ export interface KvStatusData {
   lastSynced: string | null;
   warmStartedAt?: number;
   faqCount?: number;
+  websitePageCount?: number;
 }
 
 export interface KvConfigData {
