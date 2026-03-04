@@ -108,6 +108,7 @@ export default function WelcomeScreen({
           style={{ animationDelay: `${index * 150}ms` }}
         >
           <button onClick={onAvatarClick} aria-label="Who is Steward?" className="cursor-pointer shrink-0 mt-0.5">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/avatar.png" alt="Steward" className="w-8 h-8 rounded-full transition-transform duration-200 hover:scale-125" />
           </button>
           <div className="max-w-[85%] bg-white dark:bg-gray-900 px-4 py-3 rounded-2xl rounded-tl-sm text-foreground">

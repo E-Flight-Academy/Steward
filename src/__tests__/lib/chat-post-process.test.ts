@@ -63,9 +63,8 @@ describe("processFaqSource", () => {
 
   it("uses FAQ question as title when label is empty", () => {
     const faq = makeFaq({ url: "https://eflight.nl/x" });
-    const text = "Answer [source: FAQ]";
-    // With no label and no content match (score <= 3), should not match
-    // but with a content-heavy response it might. Let's test the label path explicitly.
+    // With no label and no content match (score <= 3), should not match.
+    // Test the label path explicitly:
     const text2 = "Answer [source: FAQ | What does the training cost?]";
     const result = processFaqSource(text2, [faq]);
     expect(result.sourceTitle).toBe("What does the training cost?");

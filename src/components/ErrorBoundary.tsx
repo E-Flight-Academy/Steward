@@ -28,6 +28,7 @@ export default class ErrorBoundary extends Component<Props, State> {
     if (this.state.hasError) {
       return (
         <div className="flex flex-col items-center justify-center min-h-screen bg-[#F2F2F2] p-6 text-center">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/steward.png" alt="Steward" className="w-16 h-16 mb-4" />
           <h2 className="text-lg font-bold text-e-grey-dark mb-2">
             Something went wrong

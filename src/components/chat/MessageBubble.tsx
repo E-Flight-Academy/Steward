@@ -20,6 +20,7 @@ export default function MessageBubble({ message, index, onRate, onFaqClick, onAv
     >
       {message.role === "assistant" && (
         <button onClick={onAvatarClick} aria-label="Who is Steward?" className="cursor-pointer shrink-0 mt-0.5">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/avatar.png" alt="Steward" className="w-8 h-8 rounded-full transition-transform duration-200 hover:scale-125" />
         </button>
       )}

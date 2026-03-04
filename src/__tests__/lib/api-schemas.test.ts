@@ -8,8 +8,6 @@ import {
   faqTranslateSchema,
   faqAdminSchema,
   faqAdminAddSchema,
-  faqAdminEditSchema,
-  faqAdminDeleteSchema,
 } from "@/lib/api-schemas";
 
 describe("chatRequestSchema", () => {

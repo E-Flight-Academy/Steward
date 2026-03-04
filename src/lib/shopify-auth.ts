@@ -2,8 +2,6 @@ import { cookies } from "next/headers";
 
 // Shopify Customer Account API OAuth config
 const SHOPIFY_CLIENT_ID = process.env.SHOPIFY_CUSTOMER_CLIENT_ID || "";
-const SHOPIFY_STORE_DOMAIN = process.env.SHOPIFY_STORE_DOMAIN || "e-flight-academy.myshopify.com";
-
 // Endpoints (custom domain)
 const CUSTOMER_ACCOUNT_DOMAIN = "account.eflight.nl";
 const AUTH_ENDPOINT = `https://${CUSTOMER_ACCOUNT_DOMAIN}/authentication/oauth/authorize`;

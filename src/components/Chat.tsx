@@ -22,7 +22,7 @@ import ChatInput from "./chat/ChatInput";
 import KbStatusBar from "./chat/KbStatusBar";
 
 export default function Chat() {
-  const { t, lang, translatedStarters, setTranslations, resetLanguage, switchLanguage } = useI18n();
+  const { t, lang, setTranslations, resetLanguage, switchLanguage } = useI18n();
   const searchParams = useSearchParams();
   const [shopifyUser, setShopifyUser] = useState<{ email: string; firstName: string; lastName: string; displayName: string } | null>(null);
   const [userRoles, setUserRoles] = useState<string[]>([]);
@@ -195,14 +195,12 @@ export default function Chat() {
   const sendMessageRef = useRef<(text: string, baseMessages?: Message[], hidden?: boolean) => Promise<void>>(async () => {});
 
   const {
-    flowSteps,
     setFlowSteps,
     flowPhase,
     setFlowPhase,
     currentFlowStep,
     setCurrentFlowStep,
     flowContext,
-    setFlowContext,
     handleFlowOption,
     handleNewChat: handleNewChatFlow,
   } = useFlow({

@@ -62,6 +62,7 @@ export default function ChatHeader({
       {client !== "briefing" && (
         <div className="flex items-center gap-3">
           <button onClick={onAvatarClick} aria-label="Who is Steward?" className="cursor-pointer group">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/avatar.png" alt="Steward" className="w-9 h-9 rounded-full ring-2 ring-[#1515F5]/15 group-hover:ring-[#1515F5]/30 transition-all" />
           </button>
           <button onClick={() => window.location.reload()} className="text-left cursor-pointer">
