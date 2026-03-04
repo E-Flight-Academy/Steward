@@ -39,13 +39,13 @@ describe("I18nProvider", () => {
     expect(screen.getByText("child content")).toBeInTheDocument();
   });
 
-  it("provides default lang=en", () => {
+  it("provides default lang=nl", () => {
     render(
       <I18nProvider>
         <TestConsumer />
       </I18nProvider>
     );
-    expect(screen.getByTestId("lang").textContent).toBe("en");
+    expect(screen.getByTestId("lang").textContent).toBe("nl");
   });
 
   it("provides default labels via t()", () => {
