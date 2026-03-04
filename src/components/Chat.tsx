@@ -427,7 +427,7 @@ export default function Chat() {
     } finally {
       abortControllerRef.current = null;
       setIsLoading(false);
-      fetchKbStatus();
+      fetchKbStatus(debugMode);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages, flowPhase, flowContext, pendingFeedbackLogId, feedbackContactLogId, faqSuggestions, lang, sessionId, t, setTranslations, resetLanguage, fetchKbStatus, showWithThinkingDelay, logChat, setFlowPhase, setCurrentFlowStep, setPendingFeedbackLogId, setFeedbackContactLogId, setFeedbackFollowUpLogId, adminPhase, handleAdminInput]);
@@ -438,7 +438,7 @@ export default function Chat() {
   // Initial data fetch
   useEffect(() => {
     inputRef.current?.focus();
-    fetchKbStatus().then((data) => {
+    fetchKbStatus(debugMode).then((data) => {
       if (data?.status !== "synced") {
         startPolling();
         fetch("/api/knowledge-base/warm", { method: "POST" }).catch(() => {});

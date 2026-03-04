@@ -1,18 +1,19 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getKnowledgeBaseStatus, getDocumentContext } from "@/lib/documents";
 import { getSession } from "@/lib/shopify-auth";
 import { getUserRoles } from "@/lib/airtable";
 import { getFoldersForRoles } from "@/lib/role-access";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   const status = await getKnowledgeBaseStatus();
 
-  // If KB isn't synced yet, return early — no need for user-specific data
-  if (status.status !== "synced") {
+  // Fast path: skip user-specific data unless ?user=true (used by debug bar)
+  const includeUser = request.nextUrl.searchParams.get("user") === "true";
+  if (!includeUser || status.status !== "synced") {
     return NextResponse.json(status);
   }
 
-  // Get user session with a timeout to avoid blocking on slow Shopify calls
+  // Slow path: include user session, roles, filtered files
   let userEmail: string | null = null;
   let userRoles: string[] = [];
   let allowedFolders: string[] = ["public"];
@@ -28,14 +29,13 @@ export async function GET() {
       userRoles = await getUserRoles(userEmail);
       allowedFolders = await getFoldersForRoles(userRoles);
 
-      // Only call getDocumentContext for role-filtered view
       if (!allowedFolders.includes("*")) {
         const ctx = await getDocumentContext(allowedFolders);
         filteredFileNames = ctx.fileNames;
       }
     }
   } catch {
-    // Not logged in — use unfiltered file list from status
+    // Not logged in
   }
 
   return NextResponse.json({

@@ -15,9 +15,12 @@ export function useKbStatus() {
     pollCountRef.current = 0;
   }, []);
 
-  const fetchKbStatus = useCallback(async () => {
+  const fetchKbStatus = useCallback(async (includeUser = false) => {
     try {
-      const res = await fetch("/api/knowledge-base/status");
+      const url = includeUser
+        ? "/api/knowledge-base/status?user=true"
+        : "/api/knowledge-base/status";
+      const res = await fetch(url);
       if (res.ok) {
         const data: KbStatus = await res.json();
         setKbStatus(data);
