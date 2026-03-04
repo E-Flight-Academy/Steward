@@ -97,6 +97,24 @@ export interface WingsUserDocuments {
   documents: WingsDocument[];
 }
 
+export interface WingsBooking {
+  id: number;
+  from: string;
+  to: string;
+  comments: string | null;
+  eventTitle: string | null;
+  type: { name: string };
+  status: { name: string };
+  customer: { id: number; name: string } | null;
+  instructor: { id: number; name: string } | null;
+  aircraft: { callSign: string } | null;
+}
+
+export interface WingsSchedule {
+  userId: number;
+  bookings: WingsBooking[];
+}
+
 // --- Queries ---
 
 const USER_DOCUMENTS_QUERY = `
@@ -119,10 +137,30 @@ query GetUserDocuments($userId: Int!) {
 }
 `;
 
-// --- Document cache (per user, 1 hour TTL) ---
+const INSTRUCTOR_BOOKINGS_QUERY = `
+query GetInstructorBookings($userId: Int!, $startDate: String!, $endDate: String!) {
+  bookings(first: 50, filter: { userId: $userId, startDate: $startDate, endDate: $endDate }) {
+    data {
+      id
+      from
+      to
+      comments
+      eventTitle
+      type { name }
+      status { name }
+      customer { id name }
+      instructor { id name }
+      aircraft { callSign }
+    }
+  }
+}
+`;
+
+// --- Caches (per user, 1 hour TTL) ---
 
 const docCache = new Map<number, { data: WingsUserDocuments | null; cachedAt: number }>();
-const DOC_CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
+const scheduleCache = new Map<number, { data: WingsSchedule | null; cachedAt: number }>();
+const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
 
 // --- Public API ---
 
@@ -131,7 +169,7 @@ const DOC_CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
  */
 export async function getUserDocuments(wingsUserId: number): Promise<WingsUserDocuments | null> {
   const cached = docCache.get(wingsUserId);
-  if (cached && Date.now() - cached.cachedAt < DOC_CACHE_TTL_MS) {
+  if (cached && Date.now() - cached.cachedAt < CACHE_TTL_MS) {
     return cached.data;
   }
 
@@ -156,6 +194,68 @@ export async function getUserDocuments(wingsUserId: number): Promise<WingsUserDo
     console.error("Wings: failed to fetch user documents:", err);
     return null;
   }
+}
+
+/**
+ * Fetch upcoming bookings for an instructor (cached, 14-day window)
+ */
+export async function getInstructorBookings(wingsUserId: number): Promise<WingsSchedule | null> {
+  const cached = scheduleCache.get(wingsUserId);
+  if (cached && Date.now() - cached.cachedAt < CACHE_TTL_MS) {
+    return cached.data;
+  }
+
+  try {
+    const startDate = new Date().toISOString().slice(0, 10);
+    const endDate = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+    interface QueryResult {
+      bookings: {
+        data: WingsBooking[];
+      };
+    }
+
+    const data = await gql<QueryResult>(INSTRUCTOR_BOOKINGS_QUERY, {
+      userId: wingsUserId,
+      startDate,
+      endDate,
+    });
+
+    const result: WingsSchedule = {
+      userId: wingsUserId,
+      bookings: data.bookings.data,
+    };
+
+    scheduleCache.set(wingsUserId, { data: result, cachedAt: Date.now() });
+    return result;
+  } catch (err) {
+    console.error("Wings: failed to fetch instructor bookings:", err);
+    return null;
+  }
+}
+
+/**
+ * Build a context string for Gemini with instructor schedule info
+ */
+export function buildScheduleContext(schedule: WingsSchedule): string {
+  if (schedule.bookings.length === 0) return "";
+
+  const lines = schedule.bookings.map((b) => {
+    const date = b.from.slice(0, 10);
+    const timeFrom = b.from.slice(11, 16);
+    const timeTo = b.to.slice(11, 16);
+    const student = b.eventTitle || b.customer?.name || "—";
+    const aircraft = b.aircraft?.callSign || "—";
+    const type = b.type.name;
+    const status = b.status.name;
+    const comments = b.comments ? ` | Notes: ${b.comments.replace(/\n/g, "; ")}` : "";
+    return `- ${date} ${timeFrom}–${timeTo} | ${type} | ${student} | Aircraft: ${aircraft} | Status: ${status}${comments}`;
+  });
+
+  return [
+    "=== Instructor Schedule (upcoming 14 days) ===",
+    ...lines,
+  ].join("\n");
 }
 
 /**

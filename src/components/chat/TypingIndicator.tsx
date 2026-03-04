@@ -43,6 +43,11 @@ const STEP_LABELS: Record<string, Record<string, string[]>> = {
     en: ["Fetching documents from Wings", "Checking document validity"],
     de: ["Dokumente aus Wings abrufen", "Dokumentengültigkeit prüfen"],
   },
+  "instructor-schedule": {
+    nl: ["Lesrooster ophalen uit Wings", "Planning laden"],
+    en: ["Fetching schedule from Wings", "Loading lesson plan"],
+    de: ["Stundenplan aus Wings abrufen", "Unterrichtsplan laden"],
+  },
   generating: {
     nl: ["Antwoord formuleren", "Antwoord schrijven"],
     en: ["Formulating response", "Writing answer"],

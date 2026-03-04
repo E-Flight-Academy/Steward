@@ -9,7 +9,7 @@ import { getTranslations } from "@/lib/i18n/translate";
 import { getSession, fetchCustomerOrders, buildOrdersContext, type ShopifyOrder } from "@/lib/shopify-auth";
 import { getUserData } from "@/lib/airtable";
 import { getFoldersForRoles, getCapabilitiesForRoles } from "@/lib/role-access";
-import { getUserDocuments, buildDocumentValidityContext } from "@/lib/wings";
+import { getUserDocuments, buildDocumentValidityContext, getInstructorBookings, buildScheduleContext } from "@/lib/wings";
 import { chatRequestSchema } from "@/lib/api-schemas";
 import { logger, apiTimer } from "@/lib/logger";
 
@@ -135,7 +135,7 @@ export async function POST(request: NextRequest) {
     ), "config", controller, encoder);
 
     // Load remaining data sources in parallel (with progress events)
-    const [faqs, ragResult, binaryContext, websitePages, products, orders, wingsDocResult] = await Promise.all([
+    const [faqs, ragResult, binaryContext, websitePages, products, orders, wingsDocResult, wingsScheduleResult] = await Promise.all([
       trackProgress(withTimeout(
         getFaqs(true).catch((err) => { console.error("Failed to load FAQs:", err); return [] as never[]; }),
         5000, []
@@ -179,6 +179,15 @@ export async function POST(request: NextRequest) {
             }),
             8000, null
           ), "doc-validity", controller, encoder)
+        : Promise.resolve(null),
+      capabilities.includes("instructor-schedule") && wingsUserId
+        ? trackProgress(withTimeout(
+            getInstructorBookings(wingsUserId).catch((err) => {
+              console.error("Failed to fetch instructor schedule:", err);
+              return null;
+            }),
+            8000, null
+          ), "instructor-schedule", controller, encoder)
         : Promise.resolve(null),
     ]);
 
@@ -321,6 +330,17 @@ export async function POST(request: NextRequest) {
         instructionParts.push("", docContext);
         instructionParts.push(
           "When presenting document validity information, highlight expired documents with a clear warning. For documents expiring within 30 days, suggest the user take action soon. Group by status (expired, expiring soon, valid). Be helpful and specific about what steps to take for expired or expiring documents."
+        );
+      }
+    }
+
+    // Append instructor schedule context
+    if (wingsScheduleResult?.bookings) {
+      const scheduleContext = buildScheduleContext(wingsScheduleResult);
+      if (scheduleContext) {
+        instructionParts.push("", scheduleContext);
+        instructionParts.push(
+          "When presenting the instructor's schedule, format it clearly by date. Include student names, aircraft, and time slots. Highlight any gaps or back-to-back lessons. If there are notes/comments on a booking, include relevant details."
         );
       }
     }
