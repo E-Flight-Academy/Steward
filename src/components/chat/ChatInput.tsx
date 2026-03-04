@@ -90,7 +90,7 @@ export default function ChatInput({
           />
           {centered && !input && cyclingPlaceholders && phIndex !== undefined && phVisible !== undefined && (
             <span
-              className={`absolute left-5 ${kiosk ? "top-4 text-lg leading-7" : "top-3 leading-6"} pointer-events-none text-gray-400 transition-opacity duration-400 ${phVisible ? "opacity-70" : "opacity-0"}`}
+              className={`absolute left-5 right-16 truncate ${kiosk ? "top-4 text-lg leading-7" : "top-3 leading-6"} pointer-events-none text-gray-400 transition-opacity duration-400 ${phVisible ? "opacity-70" : "opacity-0"}`}
             >
               {cyclingPlaceholders[phIndex]}
             </span>
