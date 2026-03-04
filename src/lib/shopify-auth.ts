@@ -91,6 +91,8 @@ export async function exchangeCodeForTokens(
     method: "POST",
     headers: {
       "Content-Type": "application/x-www-form-urlencoded",
+      "User-Agent": "EFlightSteward/1.0",
+      "Accept": "application/json",
     },
     body: params.toString(),
   });
