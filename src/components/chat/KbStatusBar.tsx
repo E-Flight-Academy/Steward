@@ -95,33 +95,42 @@ export default function KbStatusBar({ kbStatus, kbExpanded, onToggle, t, current
           </div>
 
           {/* KB status */}
-          <div className="flex items-center gap-1.5">
-            <span className={`inline-block w-2 h-2 rounded-full shrink-0 ${
-              kbStatus?.status === "synced"
-                ? "bg-emerald-500"
-                : kbStatus?.status === "loading"
-                ? "bg-amber-400 animate-pulse"
-                : "bg-e-grey-light"
-            }`} />
-            {kbStatus?.status === "synced" ? (
-              <span className="text-e-grey truncate">
-                {kbStatus.user?.email || "Not logged in"}
-                {kbStatus.user?.roles && kbStatus.user.roles.length > 0 && <> &middot; {kbStatus.user.roles.join(", ")}</>}
-                {" "}&middot; Folders: {kbStatus.user?.folders?.join(", ") || "public"}
-              </span>
-            ) : kbStatus?.status === "loading" ? (
-              <span className="text-e-grey">{t("kb.label")} &middot; {t("kb.loading")}</span>
-            ) : (
-              <span className="text-e-grey">{t("kb.label")} &middot; {t("kb.notSynced")}</span>
+          <div className="space-y-1">
+            <div className="flex items-center gap-1.5">
+              <span className={`inline-block w-2 h-2 rounded-full shrink-0 ${
+                kbStatus?.status === "synced"
+                  ? "bg-emerald-500"
+                  : kbStatus?.status === "loading"
+                  ? "bg-amber-400 animate-pulse"
+                  : "bg-e-grey-light"
+              }`} />
+              {kbStatus?.status === "synced" ? (
+                <span className="text-e-grey">{kbStatus.user?.email || "Not logged in"}</span>
+              ) : kbStatus?.status === "loading" ? (
+                <span className="text-e-grey">{t("kb.label")} &middot; {t("kb.loading")}</span>
+              ) : (
+                <span className="text-e-grey">{t("kb.label")} &middot; {t("kb.notSynced")}</span>
+              )}
+            </div>
+            {kbStatus?.status === "synced" && (
+              <>
+                {kbStatus.user?.roles && kbStatus.user.roles.length > 0 && (
+                  <div className="text-e-grey pl-3.5">Roles: {kbStatus.user.roles.join(", ")}</div>
+                )}
+                <div className="text-e-grey pl-3.5">Folders: {kbStatus.user?.folders?.join(", ") || "public"}</div>
+                {kbStatus.searchOrder && (
+                  <div className="text-e-grey pl-3.5">Search: {kbStatus.searchOrder.join(" → ")}</div>
+                )}
+              </>
             )}
           </div>
 
           {/* Counts */}
           {kbStatus?.status === "synced" && (
-            <div className="flex gap-2 text-e-grey">
+            <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-e-grey">
               <span>{kbStatus.filteredFileCount ?? kbStatus.fileCount} docs</span>
-              {kbStatus.faqCount != null && <span>&middot; {kbStatus.faqCount} FAQs</span>}
-              {kbStatus.websitePageCount != null && <span>&middot; {kbStatus.websitePageCount} pages</span>}
+              <span>&middot; {kbStatus.faqCount ?? "?"} FAQs</span>
+              <span>&middot; {kbStatus.websitePageCount ?? "?"} pages</span>
             </div>
           )}
 

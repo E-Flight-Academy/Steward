@@ -43,6 +43,7 @@ export interface KbStatus {
   lastSynced: string | null;
   faqCount?: number;
   websitePageCount?: number;
+  searchOrder?: string[];
   user?: {
     email: string | null;
     roles: string[];

@@ -3,6 +3,7 @@ import { getKnowledgeBaseStatus, getDocumentContext } from "@/lib/documents";
 import { getSession } from "@/lib/shopify-auth";
 import { getUserRoles } from "@/lib/airtable";
 import { getFoldersForRoles } from "@/lib/role-access";
+import { getConfig } from "@/lib/config";
 
 export async function GET(request: NextRequest) {
   const status = await getKnowledgeBaseStatus();
@@ -12,6 +13,9 @@ export async function GET(request: NextRequest) {
   if (!includeUser || status.status !== "synced") {
     return NextResponse.json(status);
   }
+
+  // Load config for search_order display in debug panel
+  const config = await getConfig().catch(() => null);
 
   // Slow path: include user session, roles, filtered files
   let userEmail: string | null = null;
@@ -40,6 +44,7 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.json({
     ...status,
+    searchOrder: config?.search_order ?? ["faq", "drive"],
     user: { email: userEmail, roles: userRoles, folders: allowedFolders },
     filteredFileCount: filteredFileNames.length,
     filteredFileNames,

@@ -79,22 +79,25 @@ async function fetchSitemap(domain: string): Promise<string[]> {
       return (aIdx === -1 ? 99 : aIdx) - (bIdx === -1 ? 99 : bIdx);
     });
 
-    const allUrls: string[] = [];
-    for (const subUrl of sortedLocs.slice(0, MAX_SUB_SITEMAPS)) {
-      try {
+    // Fetch all sub-sitemaps in parallel for speed
+    const subResults = await Promise.allSettled(
+      sortedLocs.slice(0, MAX_SUB_SITEMAPS).map(async (subUrl) => {
         const subResp = await doFetch(subUrl);
-        if (!subResp.ok) continue;
+        if (!subResp.ok) return [];
         const subXml = await subResp.text();
         const sub$ = cheerio.load(subXml, { xmlMode: true });
         const subUrls: string[] = [];
         sub$("url loc").each((_, el) => {
           subUrls.push(sub$(el).text().trim());
         });
-        // Limit URLs per sub-sitemap to ensure variety
-        allUrls.push(...subUrls.slice(0, MAX_URLS_PER_SITEMAP));
         console.log(`  - ${subUrl.split("/").pop()}: ${subUrls.length} URLs (using ${Math.min(subUrls.length, MAX_URLS_PER_SITEMAP)})`);
-      } catch {
-        console.warn(`Failed to fetch sub-sitemap: ${subUrl}`);
+        return subUrls.slice(0, MAX_URLS_PER_SITEMAP);
+      })
+    );
+    const allUrls: string[] = [];
+    for (const result of subResults) {
+      if (result.status === "fulfilled") {
+        allUrls.push(...result.value);
       }
     }
     // Remove duplicates and filter by domain
@@ -129,28 +132,27 @@ function isDomainRoot(url: string): boolean {
  * e.g. ["https://www.eflight.nl", "https://e-deck.nl", "https://other.com/specific-page"]
  */
 async function resolveUrls(urls: string[]): Promise<string[]> {
-  const resolved: string[] = [];
-
-  for (const url of urls) {
-    if (isDomainRoot(url)) {
-      // Domain root — try sitemap discovery
-      try {
-        const domain = new URL(url).hostname;
-        const discovered = await fetchSitemap(domain);
-        if (discovered.length > 0) {
-          resolved.push(...discovered);
-        } else {
-          resolved.push(url); // Sitemap empty — keep the root URL
+  const results = await Promise.allSettled(
+    urls.map(async (url) => {
+      if (isDomainRoot(url)) {
+        try {
+          const domain = new URL(url).hostname;
+          const discovered = await fetchSitemap(domain);
+          return discovered.length > 0 ? discovered : [url];
+        } catch {
+          return [url];
         }
-      } catch {
-        resolved.push(url); // Sitemap failed — keep the root URL
       }
-    } else {
-      // Specific page — keep as-is
-      resolved.push(url);
+      return [url];
+    })
+  );
+
+  const resolved: string[] = [];
+  for (const result of results) {
+    if (result.status === "fulfilled") {
+      resolved.push(...result.value);
     }
   }
-
   return resolved;
 }
 
