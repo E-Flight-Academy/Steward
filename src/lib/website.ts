@@ -239,7 +239,7 @@ export async function syncWebsite(urls?: string[]): Promise<KvWebsitePage[]> {
   return pages;
 }
 
-export async function getWebsiteContent(urls?: string[]): Promise<KvWebsitePage[]> {
+export async function getWebsiteContent(urls?: string[], cacheOnly = false): Promise<KvWebsitePage[]> {
   // L1: in-memory
   if (cachedWebsite && Date.now() - cacheTimestamp < CACHE_TTL_MS) {
     return cachedWebsite.pages;
@@ -256,6 +256,9 @@ export async function getWebsiteContent(urls?: string[]): Promise<KvWebsitePage[
   } catch {
     // Fall through
   }
+
+  // In cache-only mode, don't trigger a full sync (let warm-up handle it)
+  if (cacheOnly) return [];
 
   // L3: Fetch from website
   return syncWebsite(urls);

@@ -129,7 +129,7 @@ export async function syncFaqs(): Promise<KvFaq[]> {
   return faqs;
 }
 
-export async function getFaqs(): Promise<KvFaq[]> {
+export async function getFaqs(cacheOnly = false): Promise<KvFaq[]> {
   // L1: in-memory
   if (cachedFaqs && Date.now() - cacheTimestamp < CACHE_TTL_MS) {
     return cachedFaqs.faqs;
@@ -146,6 +146,9 @@ export async function getFaqs(): Promise<KvFaq[]> {
   } catch {
     // Fall through
   }
+
+  // In cache-only mode, don't trigger a full sync (let warm-up handle it)
+  if (cacheOnly) return [];
 
   // L3: Fetch from Notion
   return syncFaqs();

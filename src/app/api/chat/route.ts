@@ -91,7 +91,7 @@ export async function POST(request: NextRequest) {
     // Load remaining data sources in parallel (with progress events)
     const [faqs, ragResult, binaryContext, websitePages, products, orders] = await Promise.all([
       trackProgress(withTimeout(
-        getFaqs().catch((err) => { console.error("Failed to load FAQs:", err); return [] as never[]; }),
+        getFaqs(true).catch((err) => { console.error("Failed to load FAQs:", err); return [] as never[]; }),
         5000, []
       ), "faqs", controller, encoder),
       trackProgress(withTimeout(
@@ -103,7 +103,7 @@ export async function POST(request: NextRequest) {
         10000, null
       ), "files", controller, encoder),
       trackProgress(withTimeout(
-        getWebsiteContent(config?.website_pages).catch((err) => {
+        getWebsiteContent(config?.website_pages, true).catch((err) => {
           console.error("Failed to load website content:", err);
           return [] as never[];
         }),
