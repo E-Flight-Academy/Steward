@@ -5,7 +5,6 @@ import { getConfig } from "@/lib/config";
 import { getFaqs, buildFaqContext } from "@/lib/faq";
 import { getWebsiteContent, buildWebsiteContext } from "@/lib/website";
 import { getProducts, buildProductsContext } from "@/lib/shopify";
-import { detectLanguage } from "@/lib/i18n/detect";
 import { getTranslations } from "@/lib/i18n/translate";
 import { getSession, fetchCustomerOrders, buildOrdersContext, type ShopifyOrder } from "@/lib/shopify-auth";
 import { getUserRoles } from "@/lib/airtable";
@@ -207,7 +206,8 @@ export async function POST(request: NextRequest) {
     );
 
     instructionParts.push(
-      `MANDATORY: Always respond in the SAME language as the user's message. If the user writes in Dutch, you MUST respond in Dutch. If in German, respond in German. If in English, respond in English. The user's current language preference is: ${clientLang || "en"}. Never say you cannot respond in a language - just respond in whatever language the user uses.`
+      `MANDATORY: Always respond in the SAME language as the user's message. If the user writes in Dutch, you MUST respond in Dutch. If in German, respond in German. If in English, respond in English. The user's current language preference is: ${clientLang || "en"}. Never say you cannot respond in a language - just respond in whatever language the user uses.`,
+      "LANGUAGE TAG: After the [source: ...] tag, add a [lang: xx] tag with the ISO 639-1 code of the language you responded in. For example: [lang: nl] for Dutch, [lang: en] for English, [lang: de] for German. This must be the very last tag in your response."
     );
 
     // Append guided flow context if present
@@ -304,12 +304,6 @@ export async function POST(request: NextRequest) {
     const history = [...fileContextHistory, ...userHistory];
 
     const chat = model.startChat({ history });
-
-    // Detect language in parallel with streaming (resolve before stream ends)
-    const shouldDetect = lastMessage.content.trim().length >= 10;
-    const langPromise = shouldDetect
-      ? withTimeout(detectLanguage(lastMessage.content), 5000, clientLang || "en")
-      : Promise.resolve(clientLang || "en");
 
     // Start streaming response from Gemini
     emitProgress(controller, encoder, "generating");
@@ -446,8 +440,10 @@ export async function POST(request: NextRequest) {
           // Removed: aggressive FAQ word-matching override that incorrectly
           // re-attributed Knowledge Base / General Knowledge answers as FAQ
 
-          // Resolve language detection and translations
-          const detectedLang = await langPromise;
+          // Parse language from [lang: xx] tag in response
+          const langTagMatch = fullText.match(/\[lang:\s*([a-z]{2})\s*\]/i);
+          const detectedLang = langTagMatch ? langTagMatch[1].toLowerCase() : (clientLang || "en");
+          fullText = fullText.replace(/\n?\[lang:\s*[a-z]{2}\s*\]/i, "").trimEnd();
           const langChanged = detectedLang !== (clientLang || "en");
           const done: Record<string, unknown> = { type: "done" };
 
