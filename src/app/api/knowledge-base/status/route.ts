@@ -7,39 +7,37 @@ import { getFoldersForRoles } from "@/lib/role-access";
 export async function GET() {
   const status = await getKnowledgeBaseStatus();
 
-  // Get user-specific filtered view
+  // If KB isn't synced yet, return early — no need for user-specific data
+  if (status.status !== "synced") {
+    return NextResponse.json(status);
+  }
+
+  // Get user session (non-blocking — skip role lookup if not logged in)
   let userEmail: string | null = null;
   let userRoles: string[] = [];
   let allowedFolders: string[] = ["public"];
+  let filteredFileNames: string[] = status.fileNames;
 
   try {
     const session = await getSession();
     if (session?.customer?.email) {
       userEmail = session.customer.email;
-      userRoles = await getUserRoles(session.customer.email);
+      userRoles = await getUserRoles(userEmail);
+      allowedFolders = await getFoldersForRoles(userRoles);
+
+      // Only call getDocumentContext for role-filtered view
+      if (!allowedFolders.includes("*")) {
+        const ctx = await getDocumentContext(allowedFolders);
+        filteredFileNames = ctx.fileNames;
+      }
     }
   } catch {
-    // Not logged in
-  }
-
-  allowedFolders = await getFoldersForRoles(userRoles);
-
-  // Get filtered document context to show what this user actually sees
-  let filteredFileNames: string[] = [];
-  try {
-    const ctx = await getDocumentContext(allowedFolders);
-    filteredFileNames = ctx.fileNames;
-  } catch {
-    // Non-fatal
+    // Not logged in — use unfiltered file list from status
   }
 
   return NextResponse.json({
     ...status,
-    user: {
-      email: userEmail,
-      roles: userRoles,
-      folders: allowedFolders,
-    },
+    user: { email: userEmail, roles: userRoles, folders: allowedFolders },
     filteredFileCount: filteredFileNames.length,
     filteredFileNames,
   });

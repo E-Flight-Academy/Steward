@@ -18,6 +18,8 @@ const KB_WEBSITE_KEY = "kb:website";
 const WEBSITE_TTL = 21600;      // 6 hours
 const KB_FLOWS_KEY = "kb:flows";
 const FLOWS_TTL = 3600;         // 1 hour
+const KB_STARTERS_KEY = "kb:starters";
+const STARTERS_TTL = 3600;      // 1 hour
 const KB_PRODUCTS_KEY = "kb:products";
 const PRODUCTS_TTL = 21600;     // 6 hours
 const KB_ROLE_ACCESS_KEY = "kb:role-access";
@@ -309,6 +311,26 @@ export async function setKvFlows(data: KvFlowsData): Promise<void> {
     const r = getRedis();
     if (!r) return;
     await r.set(KB_FLOWS_KEY, data, { ex: FLOWS_TTL });
+  } catch {
+    // Non-fatal
+  }
+}
+
+// --- Starters ---
+export interface KvStartersData {
+  starters: { question: string; questionNl: string; questionDe: string; answer: string; answerNl: string; answerDe: string }[];
+  cachedAt: number;
+}
+
+export async function getKvStarters(): Promise<KvStartersData | null> {
+  return kvGet<KvStartersData>(KB_STARTERS_KEY);
+}
+
+export async function setKvStarters(data: KvStartersData): Promise<void> {
+  try {
+    const r = getRedis();
+    if (!r) return;
+    await r.set(KB_STARTERS_KEY, data, { ex: STARTERS_TTL });
   } catch {
     // Non-fatal
   }

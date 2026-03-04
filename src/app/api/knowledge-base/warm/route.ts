@@ -4,6 +4,7 @@ import { getKvStatus, setKvStatus } from "@/lib/kv-cache";
 import { getWebsiteContent } from "@/lib/website";
 import { getConfig } from "@/lib/config";
 import { syncFlows } from "@/lib/guided-flows";
+import { syncStarters } from "@/lib/starters";
 
 export const maxDuration = 120;
 
@@ -49,6 +50,10 @@ async function warmUp(force: boolean = false) {
       }),
       syncFlows().catch((err) => {
         console.warn("Flows warm-up failed:", err);
+        return [];
+      }),
+      syncStarters().catch((err) => {
+        console.warn("Starters warm-up failed:", err);
         return [];
       }),
     ]);

@@ -1,4 +1,5 @@
 import { Client } from "@notionhq/client";
+import { getKvStarters, setKvStarters, type KvStartersData } from "./kv-cache";
 
 export interface Starter {
   question: string;
@@ -10,7 +11,7 @@ export interface Starter {
 }
 
 // In-memory cache
-let cachedStarters: Starter[] | null = null;
+let cachedStarters: KvStartersData | null = null;
 let cacheTimestamp = 0;
 const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
 
@@ -110,15 +111,31 @@ export async function fetchStartersFromNotion(): Promise<Starter[]> {
 
 export async function syncStarters(): Promise<Starter[]> {
   const starters = await fetchStartersFromNotion();
-  cachedStarters = starters;
+  const data: KvStartersData = { starters, cachedAt: Date.now() };
+  cachedStarters = data;
   cacheTimestamp = Date.now();
+  await setKvStarters(data);
   return starters;
 }
 
 export async function getStarters(): Promise<Starter[]> {
+  // L1: in-memory
   if (cachedStarters && Date.now() - cacheTimestamp < CACHE_TTL_MS) {
-    return cachedStarters;
+    return cachedStarters.starters;
   }
 
+  // L2: Redis
+  try {
+    const kvStarters = await getKvStarters();
+    if (kvStarters && Date.now() - kvStarters.cachedAt < CACHE_TTL_MS) {
+      cachedStarters = kvStarters;
+      cacheTimestamp = kvStarters.cachedAt;
+      return kvStarters.starters;
+    }
+  } catch {
+    // Fall through
+  }
+
+  // L3: Notion
   return syncStarters();
 }
