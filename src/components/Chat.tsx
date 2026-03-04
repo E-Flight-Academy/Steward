@@ -820,6 +820,7 @@ export default function Chat() {
           kbExpanded={kbExpanded}
           onToggle={() => setKbExpanded(!kbExpanded)}
           t={t}
+          currentClient={client}
         />
       )}
 

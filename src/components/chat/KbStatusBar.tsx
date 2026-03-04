@@ -1,3 +1,6 @@
+"use client";
+
+import { useState, useRef, useCallback } from "react";
 import type { KbStatus } from "@/types/chat";
 import type { UiLabels } from "@/lib/i18n/labels";
 
@@ -6,90 +9,152 @@ interface KbStatusBarProps {
   kbExpanded: boolean;
   onToggle: () => void;
   t: (key: keyof UiLabels) => string;
+  currentClient: string | null;
 }
 
-export default function KbStatusBar({ kbStatus, kbExpanded, onToggle, t }: KbStatusBarProps) {
+export default function KbStatusBar({ kbStatus, kbExpanded, onToggle, t, currentClient }: KbStatusBarProps) {
+  const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
+  const dragRef = useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  const onPointerDown = useCallback((e: React.PointerEvent) => {
+    e.preventDefault();
+    const panel = panelRef.current;
+    if (!panel) return;
+    const rect = panel.getBoundingClientRect();
+    dragRef.current = { startX: e.clientX, startY: e.clientY, origX: rect.left, origY: rect.top };
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+  }, []);
+
+  const onPointerMove = useCallback((e: React.PointerEvent) => {
+    if (!dragRef.current) return;
+    const { startX, startY, origX, origY } = dragRef.current;
+    setPos({ x: origX + (e.clientX - startX), y: origY + (e.clientY - startY) });
+  }, []);
+
+  const onPointerUp = useCallback(() => {
+    dragRef.current = null;
+  }, []);
+
+  const navigate = (client: string | null) => {
+    const url = new URL(window.location.href);
+    if (client) {
+      url.searchParams.set("client", client);
+    } else {
+      url.searchParams.delete("client");
+    }
+    url.searchParams.set("debug", "true");
+    window.location.href = url.toString();
+  };
+
+  const modes = [
+    { key: null, label: "Standard" },
+    { key: "kiosk", label: "Kiosk" },
+    { key: "briefing", label: "Briefing" },
+  ] as const;
+
+  const style: React.CSSProperties = pos
+    ? { position: "fixed", left: pos.x, top: pos.y, zIndex: 50 }
+    : { position: "fixed", bottom: 16, right: 16, zIndex: 50 };
+
   return (
-    <div className="border-t border-e-pale dark:border-gray-800">
-      <button
-        onClick={onToggle}
-        aria-expanded={kbExpanded}
-        aria-label="Knowledge base status"
-        className="w-full px-4 py-2 flex items-center justify-center gap-2 text-xs text-e-grey hover:bg-e-pale-light dark:hover:bg-gray-900 transition-colors cursor-pointer"
+    <div ref={panelRef} style={style} className="w-80 bg-white/95 backdrop-blur shadow-lg rounded-xl border border-[#ECECEC] text-xs select-none">
+      {/* Drag handle */}
+      <div
+        className="flex items-center gap-2 px-3 py-2 cursor-grab active:cursor-grabbing border-b border-[#ECECEC]"
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
       >
-        <span
-          className={`inline-block w-2 h-2 rounded-full ${
-            kbStatus?.status === "synced"
-              ? "bg-emerald-500"
-              : kbStatus?.status === "loading"
-              ? "bg-amber-400 animate-pulse"
-              : "bg-e-grey-light"
-          }`}
-        />
-        {kbStatus?.status === "synced" ? (
-          <span>
-            {kbStatus.user?.email ? kbStatus.user.email : "Not logged in"}
-            {kbStatus.user?.roles && kbStatus.user.roles.length > 0 && <> &middot; {kbStatus.user.roles.join(", ")}</>}
-            {" "}&middot; Folders: {kbStatus.user?.folders?.join(", ") || "public"}
-            {" "}&middot; {kbStatus.filteredFileCount ?? kbStatus.fileCount} docs
-            {kbStatus.faqCount != null && <> &middot; {kbStatus.faqCount} FAQs</>}
-            {kbStatus.websitePageCount != null && <> &middot; {kbStatus.websitePageCount} pages</>}
-          </span>
-        ) : kbStatus?.status === "loading" ? (
-          <span>{t("kb.label")} &middot; {t("kb.loading")}</span>
-        ) : (
-          <span>{t("kb.label")} &middot; {t("kb.notSynced")}</span>
-        )}
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          width="12"
-          height="12"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          className={`transition-transform ${kbExpanded ? "rotate-180" : ""}`}
-        >
-          <polyline points="6 9 12 15 18 9" />
-        </svg>
-      </button>
+        <span className="text-e-grey">⠿</span>
+        <span className="font-semibold text-e-grey-dark flex-1">Debug</span>
+        <button onClick={onToggle} className="cursor-pointer p-0.5">
+          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`text-e-grey transition-transform ${kbExpanded ? "rotate-180" : ""}`}>
+            <polyline points="6 9 12 15 18 9" />
+          </svg>
+        </button>
+      </div>
 
-      {kbExpanded && kbStatus?.status === "synced" && (
-        <div className="px-4 pb-3 max-h-48 overflow-y-auto">
-          <ul className="text-xs text-e-grey space-y-1">
-            {(kbStatus.filteredFileNames ?? kbStatus.fileNames).map((name, i) => (
-              <li key={i} className="flex items-center gap-2">
-                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
-                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                  <polyline points="14 2 14 8 20 8" />
-                </svg>
-                {name}
-              </li>
+      {kbExpanded && (
+        <div className="px-3 py-2 space-y-2">
+          {/* Client mode buttons */}
+          <div className="flex gap-1">
+            {modes.map(({ key, label }) => (
+              <button
+                key={label}
+                onClick={() => navigate(key)}
+                className={`flex-1 px-2 py-1 rounded-md text-[11px] font-medium transition-colors cursor-pointer ${
+                  currentClient === key
+                    ? "bg-e-indigo-dark text-white"
+                    : "bg-[#F7F7F7] text-e-grey-dark hover:bg-[#ECECEC]"
+                }`}
+              >
+                {label}
+              </button>
             ))}
-          </ul>
+          </div>
+
+          {/* KB status */}
+          <div className="flex items-center gap-1.5">
+            <span className={`inline-block w-2 h-2 rounded-full shrink-0 ${
+              kbStatus?.status === "synced"
+                ? "bg-emerald-500"
+                : kbStatus?.status === "loading"
+                ? "bg-amber-400 animate-pulse"
+                : "bg-e-grey-light"
+            }`} />
+            {kbStatus?.status === "synced" ? (
+              <span className="text-e-grey truncate">
+                {kbStatus.user?.email || "Not logged in"}
+                {kbStatus.user?.roles && kbStatus.user.roles.length > 0 && <> &middot; {kbStatus.user.roles.join(", ")}</>}
+                {" "}&middot; Folders: {kbStatus.user?.folders?.join(", ") || "public"}
+              </span>
+            ) : kbStatus?.status === "loading" ? (
+              <span className="text-e-grey">{t("kb.label")} &middot; {t("kb.loading")}</span>
+            ) : (
+              <span className="text-e-grey">{t("kb.label")} &middot; {t("kb.notSynced")}</span>
+            )}
+          </div>
+
+          {/* Counts */}
+          {kbStatus?.status === "synced" && (
+            <div className="flex gap-2 text-e-grey">
+              <span>{kbStatus.filteredFileCount ?? kbStatus.fileCount} docs</span>
+              {kbStatus.faqCount != null && <span>&middot; {kbStatus.faqCount} FAQs</span>}
+              {kbStatus.websitePageCount != null && <span>&middot; {kbStatus.websitePageCount} pages</span>}
+            </div>
+          )}
+
+          {/* File list */}
+          {kbStatus?.status === "synced" && (
+            <div className="max-h-32 overflow-y-auto">
+              <ul className="text-e-grey space-y-0.5">
+                {(kbStatus.filteredFileNames ?? kbStatus.fileNames).map((name, i) => (
+                  <li key={i} className="flex items-center gap-1.5 truncate">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                      <polyline points="14 2 14 8 20 8" />
+                    </svg>
+                    {name}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {kbStatus?.status === "loading" && (
+            <p className="text-e-grey">{t("kb.loadingDetail")}</p>
+          )}
+
+          {kbStatus?.status === "not_synced" && (
+            <p className="text-e-grey">{t("kb.notSyncedDetail")}</p>
+          )}
         </div>
       )}
 
-      {kbExpanded && kbStatus?.status === "loading" && (
-        <div className="px-4 pb-3">
-          <p className="text-xs text-e-grey">
-            {t("kb.loadingDetail")}
-          </p>
-        </div>
-      )}
-
-      {kbExpanded && kbStatus?.status === "not_synced" && (
-        <div className="px-4 pb-3">
-          <p className="text-xs text-e-grey">
-            {t("kb.notSyncedDetail")}
-          </p>
-        </div>
-      )}
-
+      {/* Version */}
       <button
-        className="w-full px-4 pb-1 text-[10px] text-e-grey-light text-center cursor-pointer hover:text-e-grey transition-colors"
+        className="w-full px-3 py-1.5 text-[10px] text-e-grey-light text-center cursor-pointer hover:text-e-grey transition-colors border-t border-[#ECECEC]"
         onClick={() => {
           const version = `v${process.env.NEXT_PUBLIC_VERSION} (${process.env.NEXT_PUBLIC_BUILD_ID})`;
           navigator.clipboard.writeText(version);
