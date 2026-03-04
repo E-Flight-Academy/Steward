@@ -260,7 +260,7 @@ export async function POST(request: NextRequest) {
     const systemInstruction = instructionParts.join("\n");
 
     const model = genAI.getGenerativeModel({
-      model: "gemini-2.0-flash-lite",
+      model: "gemini-2.5-flash",
       systemInstruction,
       generationConfig: { temperature: 0.5 },
     });
