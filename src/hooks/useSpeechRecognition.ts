@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect, useSyncExternalStore } from "react";
 
 interface SpeechRecognitionEvent {
   results: SpeechRecognitionResultList;
@@ -36,7 +36,11 @@ function getSpeechRecognition(): (new () => SpeechRecognitionInstance) | null {
 
 export function useSpeechRecognition(onTranscript: (text: string, isFinal: boolean) => void) {
   const [isListening, setIsListening] = useState(false);
-  const [isSupported] = useState(() => getSpeechRecognition() !== null);
+  const isSupported = useSyncExternalStore(
+    () => () => {}, // no-op subscribe (value never changes)
+    () => getSpeechRecognition() !== null, // client
+    () => false, // server
+  );
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
   const onTranscriptRef = useRef(onTranscript);
   useEffect(() => { onTranscriptRef.current = onTranscript; });
