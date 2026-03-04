@@ -41,3 +41,21 @@ jobs:
             -H "Content-Type: application/json" \
             -d '{"redeploy": true, "registry_image": "${{ env.REGISTRY }}/${{ env.IMAGE }}:${{ github.sha }}"}' \
             "https://api.scaleway.com/containers/v1beta1/regions/nl-ams/containers/${{ vars.SCW_CONTAINER_ID }}"
+
+      - name: Wait for container ready and warm up
+        if: ${{ vars.SCW_CONTAINER_ID != '' }}
+        run: |
+          echo "Waiting for container to be ready..."
+          for i in $(seq 1 30); do
+            STATUS=$(curl -s -H "X-Auth-Token: ${{ secrets.SCW_SECRET_KEY }}" \
+              "https://api.scaleway.com/containers/v1beta1/regions/nl-ams/containers/${{ vars.SCW_CONTAINER_ID }}" \
+              | python3 -c "import sys,json; print(json.load(sys.stdin)['status'])")
+            if [ "$STATUS" = "ready" ]; then
+              echo "Container ready, warming up..."
+              curl -s "https://steward18cc86cd-steward.functions.fnc.nl-ams.scw.cloud/api/knowledge-base/warm" || true
+              echo "Warm-up triggered"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Timeout waiting for container"

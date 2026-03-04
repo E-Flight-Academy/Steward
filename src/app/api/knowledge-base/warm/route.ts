@@ -3,6 +3,7 @@ import { getDocumentContext, clearDocumentCache } from "@/lib/documents";
 import { getKvStatus, setKvStatus } from "@/lib/kv-cache";
 import { getWebsiteContent } from "@/lib/website";
 import { getConfig } from "@/lib/config";
+import { syncFlows } from "@/lib/guided-flows";
 
 export const maxDuration = 120;
 
@@ -44,6 +45,10 @@ async function warmUp(force: boolean = false) {
       getDocumentContext(),
       getWebsiteContent(config?.website_pages).catch((err) => {
         console.warn("Website warm-up failed:", err);
+        return [];
+      }),
+      syncFlows().catch((err) => {
+        console.warn("Flows warm-up failed:", err);
         return [];
       }),
     ]);
