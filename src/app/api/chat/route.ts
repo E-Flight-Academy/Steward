@@ -620,10 +620,11 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error) {
-    logger.error("Chat API error", { error: String(error) });
+    const detail = error instanceof Error ? { message: error.message, stack: error.stack?.split("\n").slice(0, 5).join("\n") } : String(error);
+    logger.error("Chat API error", { error: detail });
     logDone({ status: 500 });
     return NextResponse.json(
-      { error: "Something went wrong. Please try again in a moment." },
+      { error: "Something went wrong. Please try again in a moment.", debug: detail },
       { status: 500 }
     );
   }
