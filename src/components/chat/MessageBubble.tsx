@@ -37,7 +37,16 @@ export default function MessageBubble({ message, index, onRate, onFaqClick, onAv
         const source = sourceParts[0] || null;
         const sourceUrl = sourceParts[1] && sourceParts[1].startsWith("http") ? sourceParts[1] : null;
         const sourceLabel = sourceParts.length >= 3 ? sourceParts[2] : (sourceParts[1] && !sourceParts[1].startsWith("http") ? sourceParts[1] : null);
-        const { links: inlineLinks, cleanedText: body } = parseLinkCards(bodyRaw);
+        const { links: allLinks, cleanedText: body } = parseLinkCards(bodyRaw);
+        // Deduplicate: remove inline links that match the source URL or each other
+        const seen = new Set<string>();
+        if (sourceUrl) seen.add(sourceUrl.replace(/\/$/, "").replace(/^https?:\/\/(www\.)?/, ""));
+        const inlineLinks = allLinks.filter((link) => {
+          const normalized = link.url.replace(/\/$/, "").replace(/^https?:\/\/(www\.)?/, "");
+          if (seen.has(normalized)) return false;
+          seen.add(normalized);
+          return true;
+        });
         return (
           <div className="max-w-[85%] group/msg">
           <div className="bg-white dark:bg-gray-900 px-4 py-3 rounded-2xl rounded-tl-sm text-foreground">
