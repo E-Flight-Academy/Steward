@@ -7,7 +7,7 @@ import { syncProducts } from "@/lib/shopify";
 import { syncRoleAccess } from "@/lib/role-access";
 import { getConfig } from "@/lib/config";
 import { getKvStatus, setKvStatus } from "@/lib/kv-cache";
-import { syncVectorIndex } from "@/lib/vector";
+import { syncVectorIndex, syncWebsiteVectorIndex, syncFaqVectorIndex } from "@/lib/vector";
 
 function isAuthorized(request: NextRequest): boolean {
   const secret = process.env.SYNC_SECRET;
@@ -56,10 +56,22 @@ async function handleSync(request: NextRequest) {
       }),
     ]);
 
-    // Index documents into vector store for RAG
+    // Index documents, website, and FAQs into vector store for RAG
     let vectorResult = { fileCount: 0, chunkCount: 0 };
+    let websiteVectorResult = { pageCount: 0, chunkCount: 0 };
+    let faqVectorResult = { faqCount: 0, chunkCount: 0 };
     try {
-      vectorResult = await syncVectorIndex();
+      [vectorResult, websiteVectorResult, faqVectorResult] = await Promise.all([
+        syncVectorIndex(),
+        syncWebsiteVectorIndex(websitePages).catch((err) => {
+          console.warn("Website vector sync failed:", err);
+          return { pageCount: 0, chunkCount: 0 };
+        }),
+        syncFaqVectorIndex(faqs).catch((err) => {
+          console.warn("FAQ vector sync failed:", err);
+          return { faqCount: 0, chunkCount: 0 };
+        }),
+      ]);
     } catch (err) {
       console.warn("Vector index sync failed:", err);
     }
@@ -83,6 +95,8 @@ async function handleSync(request: NextRequest) {
       products: { count: products.length, titles: products.map((p) => p.title) },
       roleAccess: { count: roleAccess.length, roles: roleAccess.map((r) => r.role) },
       vectorIndex: { fileCount: vectorResult.fileCount, chunkCount: vectorResult.chunkCount },
+      websiteVector: { pageCount: websiteVectorResult.pageCount, chunkCount: websiteVectorResult.chunkCount },
+      faqVector: { faqCount: faqVectorResult.faqCount, chunkCount: faqVectorResult.chunkCount },
     });
   } catch (err) {
     console.error("Notion sync failed:", err);

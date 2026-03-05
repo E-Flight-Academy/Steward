@@ -4,6 +4,7 @@ import { getRelevantDocuments, getBinaryDocumentContext } from "@/lib/documents"
 import { getConfig } from "@/lib/config";
 import { getFaqs, buildFaqContext } from "@/lib/faq";
 import { getWebsiteContent, buildWebsiteContext } from "@/lib/website";
+import { isVectorConfigured, queryWebsite, queryFaqs, type WebsiteMatch, type FaqMatch } from "@/lib/vector";
 import { getProducts, buildProductsContext } from "@/lib/shopify";
 import { getTranslations } from "@/lib/i18n/translate";
 import { getSession, fetchCustomerOrders, buildOrdersContext, type ShopifyOrder } from "@/lib/shopify-auth";
@@ -149,8 +150,12 @@ export async function POST(request: NextRequest) {
       5000, null
     ), "config", controller, encoder);
 
+    // Use RAG for website/FAQ when vector store is configured
+    const useVectorRag = isVectorConfigured();
+
     // Load remaining data sources in parallel (with progress events)
-    const [faqs, ragResult, binaryContext, websitePages, products, orders, wingsDocResult, wingsScheduleResult] = await Promise.all([
+    const [faqs, ragResult, binaryContext, websitePages, products, orders, wingsDocResult, wingsScheduleResult, faqMatches, websiteMatches] = await Promise.all([
+      // Full FAQ list (needed for source matching even with RAG)
       trackProgress(withTimeout(
         getFaqs(true).catch((err) => { console.error("Failed to load FAQs:", err); return [] as never[]; }),
         5000, []
@@ -163,6 +168,7 @@ export async function POST(request: NextRequest) {
         getBinaryDocumentContext(allowedFolders).catch((err) => { console.error("Failed to load binary context:", err); return null; }),
         10000, null
       ), "files", controller, encoder),
+      // Full website pages (fallback when no vector, also needed for source URL matching)
       trackProgress(withTimeout(
         getWebsiteContent(config?.website_pages, true).catch((err) => {
           console.error("Failed to load website content:", err);
@@ -204,6 +210,19 @@ export async function POST(request: NextRequest) {
             8000, null
           ), "instructor-schedule", controller, encoder)
         : Promise.resolve(null),
+      // RAG queries for FAQ and website
+      useVectorRag
+        ? trackProgress(withTimeout(
+            queryFaqs(lastMessage.content, 8).catch((err) => { console.error("FAQ RAG failed:", err); return [] as FaqMatch[]; }),
+            5000, [] as FaqMatch[]
+          ), "faq-rag", controller, encoder)
+        : Promise.resolve([] as FaqMatch[]),
+      useVectorRag
+        ? trackProgress(withTimeout(
+            queryWebsite(lastMessage.content, 10).catch((err) => { console.error("Website RAG failed:", err); return [] as WebsiteMatch[]; }),
+            5000, [] as WebsiteMatch[]
+          ), "website-rag", controller, encoder)
+        : Promise.resolve([] as WebsiteMatch[]),
     ]);
 
     const searchOrder = config?.search_order ?? ["faq", "drive"];
@@ -304,9 +323,20 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Append FAQ context
+    // Append FAQ context (RAG or full)
     if (searchOrder.includes("faq") && faqs.length > 0) {
-      instructionParts.push("", buildFaqContext(faqs, clientLang || "en"));
+      const MIN_FAQ_SCORE = 0.65;
+      const relevantFaqMatches = faqMatches.filter((m) => m.score >= MIN_FAQ_SCORE);
+      if (useVectorRag && relevantFaqMatches.length > 0) {
+        // RAG: only include relevant FAQs matched by vector search
+        const matchedQuestions = new Set(relevantFaqMatches.map((m) => m.question));
+        const relevantFaqs = faqs.filter((f) => matchedQuestions.has(f.question));
+        console.log(`FAQ RAG: ${faqMatches.length} matches, ${relevantFaqs.length} above threshold (${MIN_FAQ_SCORE})`);
+        instructionParts.push("", buildFaqContext(relevantFaqs, clientLang || "en"));
+      } else {
+        // Fallback: send all FAQs
+        instructionParts.push("", buildFaqContext(faqs, clientLang || "en"));
+      }
     }
 
     // Append Drive document context (RAG excerpts or full text fallback)
@@ -318,9 +348,31 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Append Website context
+    // Append Website context (RAG or full)
     if (searchOrder.includes("website") && websitePages.length > 0) {
-      instructionParts.push("", buildWebsiteContext(websitePages));
+      const MIN_WEBSITE_SCORE = 0.65;
+      const relevantWebMatches = websiteMatches.filter((m) => m.score >= MIN_WEBSITE_SCORE);
+      if (useVectorRag && relevantWebMatches.length > 0) {
+        // RAG: only include relevant website excerpts
+        // Deduplicate by URL and limit per page
+        const seen = new Set<string>();
+        const deduped: WebsiteMatch[] = [];
+        for (const m of relevantWebMatches) {
+          const key = m.url;
+          if (!seen.has(key) || deduped.filter((d) => d.url === key).length < 3) {
+            seen.add(key);
+            deduped.push(m);
+          }
+        }
+        console.log(`Website RAG: ${websiteMatches.length} matches, ${deduped.length} above threshold (${MIN_WEBSITE_SCORE})`);
+        const entries = deduped
+          .map((m) => `--- ${m.title} (${m.url}) ---\n${m.text}`)
+          .join("\n\n");
+        instructionParts.push("", `=== Website Content (relevant excerpts) ===\n${entries}`);
+      } else {
+        // Fallback: send all pages
+        instructionParts.push("", buildWebsiteContext(websitePages));
+      }
     }
 
     // Append Products context
