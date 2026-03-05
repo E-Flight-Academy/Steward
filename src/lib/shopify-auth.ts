@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import { createHmac, timingSafeEqual } from "crypto";
 
 // Shopify Customer Account API OAuth config
 const SHOPIFY_CLIENT_ID = process.env.SHOPIFY_CUSTOMER_CLIENT_ID || "";
@@ -15,6 +16,30 @@ const CALLBACK_URL = process.env.SHOPIFY_CALLBACK_URL || "https://steward.efligh
 // Session cookie name
 const SESSION_COOKIE = "steward_session";
 const CODE_VERIFIER_COOKIE = "shopify_code_verifier";
+
+// HMAC signing for session cookies
+function getSessionSecret(): string {
+  return process.env.SESSION_SECRET || process.env.GEMINI_API_KEY || "steward-fallback-secret";
+}
+
+function signSession(payload: string): string {
+  const sig = createHmac("sha256", getSessionSecret()).update(payload).digest("base64url");
+  return `${payload}.${sig}`;
+}
+
+function verifySession(signed: string): string | null {
+  const lastDot = signed.lastIndexOf(".");
+  if (lastDot === -1) return null;
+  const payload = signed.slice(0, lastDot);
+  const sig = signed.slice(lastDot + 1);
+  const expected = createHmac("sha256", getSessionSecret()).update(payload).digest("base64url");
+  try {
+    if (timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) {
+      return payload;
+    }
+  } catch { /* length mismatch */ }
+  return null;
+}
 
 // PKCE helpers
 function generateRandomString(length: number): string {
@@ -159,13 +184,14 @@ export async function fetchCustomerData(accessToken: string): Promise<ShopifyCus
   };
 }
 
-// Create session cookie
+// Create session cookie (HMAC-signed)
 export async function createSession(sessionData: SessionData): Promise<void> {
   const cookieStore = await cookies();
   const sessionJson = JSON.stringify(sessionData);
   const encoded = Buffer.from(sessionJson).toString("base64");
+  const signed = signSession(encoded);
 
-  cookieStore.set(SESSION_COOKIE, encoded, {
+  cookieStore.set(SESSION_COOKIE, signed, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
@@ -174,7 +200,7 @@ export async function createSession(sessionData: SessionData): Promise<void> {
   });
 }
 
-// Get current session
+// Get current session (verifies HMAC signature)
 export async function getSession(): Promise<SessionData | null> {
   const cookieStore = await cookies();
   const sessionCookie = cookieStore.get(SESSION_COOKIE);
@@ -184,10 +210,17 @@ export async function getSession(): Promise<SessionData | null> {
   }
 
   try {
-    const decoded = Buffer.from(sessionCookie.value, "base64").toString("utf-8");
+    // Try signed format first
+    const verified = verifySession(sessionCookie.value);
+    const encoded = verified ?? sessionCookie.value;
+    // If verification failed and cookie contains a dot (signed format), reject it
+    if (!verified && sessionCookie.value.includes(".")) {
+      return null;
+    }
+
+    const decoded = Buffer.from(encoded, "base64").toString("utf-8");
     const session = JSON.parse(decoded) as SessionData;
 
-    // Check if session is expired
     if (session.expiresAt < Date.now()) {
       return null;
     }
