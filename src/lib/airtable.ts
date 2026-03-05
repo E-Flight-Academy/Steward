@@ -37,6 +37,7 @@ export async function getUserData(email: string): Promise<AirtableUserData> {
     const fields = ["Wings Role", "Client E-Mail", "Wings User ID"].map(f => `fields%5B%5D=${encodeURIComponent(f)}`).join("&");
     const url = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${encodeURIComponent(AIRTABLE_TABLE_NAME)}?filterByFormula=${encodeURIComponent(formula)}&${fields}`;
 
+    console.log(`[Airtable] Looking up email: ${email}, base: ${AIRTABLE_BASE_ID}, table: ${AIRTABLE_TABLE_NAME}`);
     const response = await fetch(url, {
       headers: {
         Authorization: `Bearer ${AIRTABLE_TOKEN}`,
@@ -46,14 +47,15 @@ export async function getUserData(email: string): Promise<AirtableUserData> {
 
     if (!response.ok) {
       const error = await response.text();
-      console.error("Airtable API error:", error);
+      console.error("[Airtable] API error:", response.status, error);
       return { roles: [], wingsUserId: null };
     }
 
     const data: AirtableResponse = await response.json();
+    console.log(`[Airtable] Got ${data.records.length} records for ${email}`);
 
     if (data.records.length === 0) {
-      console.log(`No Airtable record found for email: ${email}`);
+      console.log(`[Airtable] No record found for email: ${email}`);
       return { roles: [], wingsUserId: null };
     }
 
