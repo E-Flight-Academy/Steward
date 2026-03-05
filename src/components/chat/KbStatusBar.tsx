@@ -167,6 +167,16 @@ export default function KbStatusBar({ kbStatus, kbExpanded, onToggle, t, current
             </button>
           </div>
 
+          {/* Reset override */}
+          {(currentRole || (currentUserEmail && currentUserEmail !== "true")) && (
+            <button
+              onClick={() => navigate({ user: null, role: null })}
+              className="w-full px-2 py-1 rounded-md text-[11px] font-medium bg-e-pink text-white cursor-pointer hover:bg-e-pink/80 transition-colors"
+            >
+              ✕ Stop impersonating
+            </button>
+          )}
+
           {/* KB status */}
           <div className="space-y-1">
             <div className="flex items-center gap-1.5">
@@ -178,7 +188,10 @@ export default function KbStatusBar({ kbStatus, kbExpanded, onToggle, t, current
                   : "bg-e-grey-light"
               }`} />
               {kbStatus?.status === "synced" ? (
-                <span className="text-e-grey">{kbStatus.user?.email || "Not logged in"}</span>
+                <span className="text-e-grey">
+                  {kbStatus.user?.override && <span className="text-e-pink font-medium">⚡ </span>}
+                  {kbStatus.user?.email || "Not logged in"}
+                </span>
               ) : kbStatus?.status === "loading" ? (
                 <span className="text-e-grey">{t("kb.label")} &middot; {t("kb.loading")}</span>
               ) : (
