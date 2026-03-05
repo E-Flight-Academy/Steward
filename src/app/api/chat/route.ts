@@ -624,7 +624,7 @@ export async function POST(request: NextRequest) {
     logger.error("Chat API error", { error: detail });
     logDone({ status: 500 });
     return NextResponse.json(
-      { error: "Something went wrong. Please try again in a moment.", debug: detail },
+      { error: "Something went wrong. Please try again in a moment." },
       { status: 500 }
     );
   }
