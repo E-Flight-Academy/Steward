@@ -18,28 +18,50 @@ export async function GET(request: NextRequest) {
   const config = await getConfig().catch(() => null);
 
   // Slow path: include user session, roles, filtered files
+  const DEBUG_OVERRIDE_EMAILS = ["matthijs@eflight.nl", "matthijscollard@gmail.com"];
+  const overrideUser = request.nextUrl.searchParams.get("override_user");
+  const overrideRole = request.nextUrl.searchParams.get("override_role");
+
   let userEmail: string | null = null;
   let userRoles: string[] = [];
   let userCapabilities: string[] = [];
   let allowedFolders: string[] = ["public"];
   let filteredFileNames: string[] = status.fileNames;
+  let isOverride = false;
 
   try {
     const session = await Promise.race([
       getSession(),
       new Promise<null>((resolve) => setTimeout(() => resolve(null), 2000)),
     ]);
-    if (session?.customer?.email) {
-      userEmail = session.customer.email;
+
+    const sessionEmail = session?.customer?.email;
+    const canOverride = sessionEmail && DEBUG_OVERRIDE_EMAILS.includes(sessionEmail.toLowerCase());
+
+    if (canOverride && (overrideUser || overrideRole)) {
+      // Debug override: impersonate another user/role
+      isOverride = true;
+      if (overrideUser) {
+        userEmail = overrideUser;
+        const userData = await getUserData(overrideUser);
+        userRoles = userData.roles;
+      } else if (overrideRole) {
+        userEmail = sessionEmail;
+        userRoles = [overrideRole];
+      }
+      allowedFolders = await getFoldersForRoles(userRoles);
+      userCapabilities = await getCapabilitiesForRoles(userRoles);
+    } else if (sessionEmail) {
+      userEmail = sessionEmail;
       const userData = await getUserData(userEmail);
       userRoles = userData.roles;
       allowedFolders = await getFoldersForRoles(userRoles);
       userCapabilities = await getCapabilitiesForRoles(userRoles);
+    }
 
-      if (!allowedFolders.includes("*")) {
-        const ctx = await getDocumentContext(allowedFolders);
-        filteredFileNames = ctx.fileNames;
-      }
+    if (!allowedFolders.includes("*")) {
+      const ctx = await getDocumentContext(allowedFolders);
+      filteredFileNames = ctx.fileNames;
     }
   } catch {
     // Not logged in
@@ -48,7 +70,7 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({
     ...status,
     searchOrder: config?.search_order ?? ["faq", "drive"],
-    user: { email: userEmail, roles: userRoles, folders: allowedFolders, capabilities: userCapabilities },
+    user: { email: userEmail, roles: userRoles, folders: allowedFolders, capabilities: userCapabilities, ...(isOverride ? { override: true } : {}) },
     filteredFileCount: filteredFileNames.length,
     filteredFileNames,
   });

@@ -17,10 +17,17 @@ export function useKbStatus() {
 
   const fetchKbStatus = useCallback(async (includeUser = false) => {
     try {
-      const url = includeUser
-        ? "/api/knowledge-base/status?user=true"
-        : "/api/knowledge-base/status";
-      const res = await fetch(url);
+      const url = new URL("/api/knowledge-base/status", window.location.origin);
+      if (includeUser) {
+        url.searchParams.set("user", "true");
+        // Forward debug override params from the page URL
+        const pageParams = new URLSearchParams(window.location.search);
+        const overrideUser = pageParams.get("user");
+        const overrideRole = pageParams.get("role");
+        if (overrideUser && overrideUser !== "true") url.searchParams.set("override_user", overrideUser);
+        if (overrideRole) url.searchParams.set("override_role", overrideRole);
+      }
+      const res = await fetch(url.toString());
       if (res.ok) {
         const data: KbStatus = await res.json();
         setKbStatus(data);
