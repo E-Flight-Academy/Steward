@@ -77,3 +77,49 @@ export async function getUserRoles(email: string): Promise<string[]> {
   const data = await getUserData(email);
   return data.roles;
 }
+
+export interface AirtableCustomerSummary {
+  email: string;
+  name: string;
+  roles: string[];
+}
+
+/**
+ * Fetch all customers from Airtable (for admin user picker)
+ */
+export async function getAllCustomers(): Promise<AirtableCustomerSummary[]> {
+  if (!AIRTABLE_TOKEN || !AIRTABLE_BASE_ID) return [];
+
+  const customers: AirtableCustomerSummary[] = [];
+  let offset: string | undefined;
+
+  try {
+    do {
+      const fields = ["Client E-Mail", "Name", "Wings Role"].map(f => `fields%5B%5D=${encodeURIComponent(f)}`).join("&");
+      const url = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${encodeURIComponent(AIRTABLE_TABLE_NAME)}?${fields}${offset ? `&offset=${offset}` : ""}`;
+
+      const response = await fetch(url, {
+        headers: { Authorization: `Bearer ${AIRTABLE_TOKEN}` },
+        next: { revalidate: 300 },
+      });
+
+      if (!response.ok) break;
+      const data = await response.json();
+
+      for (const rec of data.records) {
+        const email = rec.fields["Client E-Mail"];
+        if (!email) continue;
+        customers.push({
+          email,
+          name: rec.fields.Name?.[0] || email.split("@")[0],
+          roles: rec.fields["Wings Role"] || [],
+        });
+      }
+      offset = data.offset;
+    } while (offset);
+  } catch (err) {
+    console.error("Failed to fetch all customers:", err);
+  }
+
+  return customers.sort((a, b) => a.name.localeCompare(b.name));
+}

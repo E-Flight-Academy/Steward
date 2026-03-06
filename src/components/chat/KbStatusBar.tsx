@@ -1,9 +1,15 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { KbStatus } from "@/types/chat";
 import type { UiLabels } from "@/lib/i18n/labels";
+
+interface CustomerOption {
+  email: string;
+  name: string;
+  roles: string[];
+}
 
 interface KbStatusBarProps {
   kbStatus: KbStatus | null;
@@ -13,6 +19,8 @@ interface KbStatusBarProps {
   currentClient: string | null;
   onRefreshStatus?: () => void;
 }
+
+const ALL_ROLES = ["student", "renter", "instructor", "operations"];
 
 export default function KbStatusBar({ kbStatus, kbExpanded, onToggle, t, currentClient, onRefreshStatus }: KbStatusBarProps) {
   const router = useRouter();
@@ -51,27 +59,70 @@ export default function KbStatusBar({ kbStatus, kbExpanded, onToggle, t, current
     }
     url.set("debug", "true");
     router.push(`?${url.toString()}`);
-    // Refresh KB status after URL update
     setTimeout(() => onRefreshStatus?.(), 100);
   }, [searchParams, router, onRefreshStatus]);
 
-  const currentRole = searchParams.get("role");
   const currentUserEmail = searchParams.get("user");
+  const currentRoleParam = searchParams.get("role");
+  const selectedRoles = currentRoleParam ? currentRoleParam.split(",").filter(Boolean) : [];
+  const isImpersonating = !!currentUserEmail || selectedRoles.length > 0;
+
+  // The roles shown in KB status (from Airtable or override)
+  const actualRoles = kbStatus?.user?.roles || [];
 
   const [emailInput, setEmailInput] = useState(currentUserEmail || "");
+  const [customers, setCustomers] = useState<CustomerOption[]>([]);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Load customers list once
+  useEffect(() => {
+    fetch("/api/debug/customers")
+      .then(r => r.ok ? r.json() : [])
+      .then(setCustomers)
+      .catch(() => {});
+  }, []);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setShowDropdown(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const filteredCustomers = emailInput.trim()
+    ? customers.filter(c =>
+        c.name.toLowerCase().includes(emailInput.toLowerCase()) ||
+        c.email.toLowerCase().includes(emailInput.toLowerCase())
+      ).slice(0, 8)
+    : customers.slice(0, 8);
+
+  const selectCustomer = useCallback((c: CustomerOption) => {
+    setEmailInput(c.email);
+    setShowDropdown(false);
+    navigate({ user: c.email, role: null });
+  }, [navigate]);
+
+  const toggleRole = useCallback((role: string) => {
+    // Start from actual roles displayed (Airtable or current override)
+    const base = selectedRoles.length > 0 ? selectedRoles : actualRoles;
+    let next: string[];
+    if (base.includes(role)) {
+      next = base.filter(r => r !== role);
+    } else {
+      next = [...base, role];
+    }
+    navigate({ role: next.length > 0 ? next.join(",") : null });
+  }, [selectedRoles, actualRoles, navigate]);
 
   const modes = [
     { key: null, label: "Standard" },
     { key: "kiosk", label: "Kiosk" },
     { key: "briefing", label: "Briefing" },
-  ] as const;
-
-  const roles = [
-    { key: null, label: "Anonymous" },
-    { key: "student", label: "Student" },
-    { key: "renter", label: "Renter" },
-    { key: "instructor", label: "Instructor" },
-    { key: "operations", label: "Operations" },
   ] as const;
 
   const style: React.CSSProperties = pos
@@ -121,64 +172,106 @@ export default function KbStatusBar({ kbStatus, kbExpanded, onToggle, t, current
             </div>
           </div>
 
-          {/* Role override selector */}
+          {/* Impersonate user */}
+          <div ref={dropdownRef}>
+            <div className="text-[10px] text-e-grey font-medium uppercase tracking-wide mb-1">User</div>
+            <div className="relative">
+              <div className="flex gap-1 items-center">
+                <input
+                  type="text"
+                  value={emailInput}
+                  onChange={(e) => { setEmailInput(e.target.value); setShowDropdown(true); }}
+                  onFocus={() => setShowDropdown(true)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      setShowDropdown(false);
+                      if (emailInput.trim()) {
+                        navigate({ user: emailInput.trim(), role: null });
+                      } else {
+                        navigate({ user: null, role: null });
+                      }
+                    }
+                    if (e.key === "Escape") setShowDropdown(false);
+                  }}
+                  placeholder="Search name or email..."
+                  className="flex-1 px-2 py-1.5 rounded-md text-[11px] border border-[#ECECEC] bg-white outline-none focus:border-e-indigo"
+                />
+                {currentUserEmail && (
+                  <button
+                    onClick={() => { setEmailInput(""); navigate({ user: null, role: null }); }}
+                    className="px-1.5 py-1.5 rounded-md text-[11px] text-e-grey cursor-pointer hover:text-e-grey-dark transition-colors"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                  </button>
+                )}
+              </div>
+              {showDropdown && filteredCustomers.length > 0 && (
+                <div className="absolute left-0 right-0 mt-1 bg-white rounded-lg shadow-lg border border-[#ECECEC] max-h-48 overflow-y-auto z-50">
+                  {filteredCustomers.map((c) => (
+                    <button
+                      key={c.email}
+                      onClick={() => selectCustomer(c)}
+                      className={`w-full px-2.5 py-2 text-left hover:bg-[#F7F7F7] transition-colors cursor-pointer ${
+                        currentUserEmail === c.email ? "bg-[#F7F7F7]" : ""
+                      }`}
+                    >
+                      <div className="text-[11px] font-medium text-foreground truncate">{c.name}</div>
+                      <div className="text-[10px] text-e-grey truncate">{c.email}{c.roles.length > 0 ? ` · ${c.roles.join(", ")}` : ""}</div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Role toggles (multi-select) */}
           <div>
-            <div className="text-[10px] text-e-grey font-medium uppercase tracking-wide mb-1">Role</div>
-            <div className="flex bg-[#F2F2F2] rounded-lg p-0.5 flex-wrap">
-              {roles.map(({ key, label }) => {
-                const active = currentRole === key;
+            <div className="text-[10px] text-e-grey font-medium uppercase tracking-wide mb-1">
+              Roles
+              {selectedRoles.length > 0 && (
+                <button
+                  onClick={() => navigate({ role: null })}
+                  className="ml-1.5 text-e-pink hover:text-e-pink/70 cursor-pointer transition-colors"
+                >
+                  reset
+                </button>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-1">
+              {ALL_ROLES.map((role) => {
+                const isActive = selectedRoles.length > 0
+                  ? selectedRoles.includes(role)
+                  : actualRoles.map(r => r.toLowerCase()).includes(role);
+                const isFromAirtable = selectedRoles.length === 0 && isActive;
                 return (
                   <button
-                    key={label}
-                    onClick={() => navigate({ role: key })}
-                    className={`flex-1 px-2 py-1.5 rounded-md text-[11px] font-medium transition-all cursor-pointer whitespace-nowrap ${
-                      active
-                        ? "bg-white text-e-indigo-dark shadow-sm"
-                        : "text-e-grey hover:text-e-grey-dark"
+                    key={role}
+                    onClick={() => toggleRole(role)}
+                    className={`px-2.5 py-1 rounded-full text-[11px] font-medium transition-all cursor-pointer border ${
+                      isActive
+                        ? isFromAirtable
+                          ? "border-emerald-300 bg-emerald-50 text-emerald-700"
+                          : "border-e-indigo-light bg-e-indigo-light/10 text-e-indigo-dark"
+                        : "border-[#ECECEC] bg-white text-e-grey hover:border-e-grey-light"
                     }`}
                   >
-                    {label}
+                    {role}
                   </button>
                 );
               })}
             </div>
+            {selectedRoles.length === 0 && actualRoles.length > 0 && (
+              <div className="text-[10px] text-emerald-600 mt-1">from Airtable</div>
+            )}
           </div>
 
-          {/* User email override (dev only) */}
-          <div className="flex gap-1 items-center">
-            <input
-              type="text"
-              value={emailInput}
-              onChange={(e) => setEmailInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && emailInput.trim()) {
-                  navigate({ user: emailInput.trim(), role: null });
-                }
-              }}
-              placeholder="user@email.com"
-              className="flex-1 px-2 py-1 rounded-md text-[11px] border border-[#ECECEC] bg-white outline-none focus:border-e-indigo"
-            />
+          {/* Reset all overrides */}
+          {isImpersonating && (
             <button
-              onClick={() => {
-                if (emailInput.trim()) {
-                  navigate({ user: emailInput.trim(), role: null });
-                } else {
-                  navigate({ user: null });
-                }
-              }}
-              className="px-2 py-1 rounded-md text-[11px] font-medium bg-e-indigo-dark text-white cursor-pointer hover:bg-e-indigo"
+              onClick={() => { setEmailInput(""); navigate({ user: null, role: null }); }}
+              className="w-full px-2 py-1.5 rounded-md text-[11px] font-medium bg-e-pink/10 text-e-pink border border-e-pink/20 cursor-pointer hover:bg-e-pink/20 transition-colors"
             >
-              {emailInput.trim() ? "Go" : "Clear"}
-            </button>
-          </div>
-
-          {/* Reset override */}
-          {(currentRole || (currentUserEmail && currentUserEmail !== "true")) && (
-            <button
-              onClick={() => navigate({ user: null, role: null })}
-              className="w-full px-2 py-1 rounded-md text-[11px] font-medium bg-e-pink text-white cursor-pointer hover:bg-e-pink/80 transition-colors"
-            >
-              ✕ Stop impersonating
+              Stop impersonating
             </button>
           )}
 
