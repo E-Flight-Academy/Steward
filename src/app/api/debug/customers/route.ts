@@ -28,6 +28,22 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    // Step 1: test token with simple meta request
+    const metaRes = await fetch("https://api.airtable.com/v0/meta/bases", {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: "no-store",
+    });
+    if (!metaRes.ok) {
+      return NextResponse.json({
+        error: "Token invalid (meta/bases failed)",
+        status: metaRes.status,
+        tokenLen: token.length,
+        tokenPrefix: token.substring(0, 10),
+        tokenSuffix: token.substring(token.length - 4),
+      }, { status: 500 });
+    }
+
+    // Step 2: actual customer search
     const q = query.replace(/"/g, '\\"');
     const formula = `OR(FIND(LOWER("${q}"), LOWER({Client E-Mail})), FIND(LOWER("${q}"), LOWER(ARRAYJOIN({Name}))))`;
     const fields = ["Client E-Mail", "Name", "Wings Role"].map(f => `fields%5B%5D=${encodeURIComponent(f)}`).join("&");
@@ -43,8 +59,10 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({
         error: `Airtable ${response.status}`,
         detail: body,
-        tokenPrefix: token.substring(0, 8),
+        tokenPrefix: token.substring(0, 10),
+        tokenLen: token.length,
         baseId,
+        metaWorked: true,
       }, { status: 500 });
     }
 
