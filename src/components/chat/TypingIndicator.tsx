@@ -77,7 +77,7 @@ export default function TypingIndicator({ progressSteps = [], lang = "nl" }: Typ
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src="/avatar.png" alt="Steward" className="w-8 h-8 rounded-full shrink-0 transition-transform duration-200 hover:scale-150" />
       <div className="max-w-[85%]">
-        <div className="bg-white dark:bg-gray-900 px-4 py-3 rounded-2xl rounded-tl-sm">
+        <div className="bg-white dark:bg-gray-900 px-4 py-3 rounded-2xl rounded-tl-sm shadow-sm">
           {/* Bouncing dots */}
           <div className="flex space-x-2 h-5 items-center">
             <div className="w-2 h-2 bg-e-indigo-light rounded-full animate-bounce" />
