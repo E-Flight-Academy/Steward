@@ -66,8 +66,8 @@ export default function Chat() {
 
   useEffect(() => {
     scrollToBottom();
-    inputRef.current?.focus();
-  }, [messages]);
+    if (!isTouchDevice) inputRef.current?.focus();
+  }, [messages, isTouchDevice]);
 
   // Resize container to visual viewport so input stays above iOS keyboard
   const shellRef = useRef<HTMLDivElement>(null);
@@ -97,10 +97,10 @@ export default function Chat() {
   }, []);
 
   useEffect(() => {
-    if (!isLoading) {
+    if (!isLoading && !isTouchDevice) {
       setTimeout(() => inputRef.current?.focus(), 50);
     }
-  }, [isLoading]);
+  }, [isLoading, isTouchDevice]);
 
   const getQ = useCallback((item: { question: string; questionNl: string; questionDe: string }) => {
     if (lang === "nl" && item.questionNl) return item.questionNl;
@@ -455,7 +455,7 @@ export default function Chat() {
 
   // Initial data fetch
   useEffect(() => {
-    inputRef.current?.focus();
+    if (!isTouchDevice) inputRef.current?.focus();
     fetchKbStatus(debugMode).then((data) => {
       if (data?.status !== "synced") {
         startPolling();
@@ -799,7 +799,7 @@ export default function Chat() {
             messagesEndRef={messagesEndRef}
             kiosk={isKiosk}
             adminPhase={isAdmin ? adminPhase : undefined}
-            onAdminAction={isAdmin ? (a) => { chooseAction(a); setTimeout(() => inputRef.current?.focus(), 50); } : undefined}
+            onAdminAction={isAdmin ? (a) => { chooseAction(a); if (!isTouchDevice) setTimeout(() => inputRef.current?.focus(), 50); } : undefined}
             onAdminApply={isAdmin ? applyAdmin : undefined}
             onAdminCancel={isAdmin ? cancelAdmin : undefined}
             onAdminRevise={isAdmin ? reviseAdmin : undefined}

@@ -1,6 +1,6 @@
 export default function PatternsPage() {
   return (
-    <div className="min-h-screen bg-gradient-to-b from-[#EFEFEF] to-[#F7F7F7] p-8 fixed inset-0 overflow-y-auto">
+    <div className="min-h-screen bg-background p-8 fixed inset-0 overflow-y-auto">
       <div className="max-w-4xl mx-auto space-y-12">
         <div>
           <h1 className="text-3xl font-bold text-e-indigo-dark mb-2">Steward Pattern Library</h1>
@@ -223,6 +223,29 @@ export default function PatternsPage() {
             "Source attribution card",
           ]} />
           <CodeRef>MessageBubble.tsx</CodeRef>
+        </Section>
+
+        {/* ===== SPEECH BUBBLES ===== */}
+        <Section title="Speech Bubbles" description="Chat message bubbles with subtle shadow. Assistant (white, rounded-tl-sm) and user (indigo, rounded-tr-sm).">
+          <div className="space-y-4">
+            <div className="flex justify-start items-start gap-3">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/avatar.png" alt="Steward" className="w-8 h-8 rounded-full shrink-0 mt-0.5" />
+              <div className="max-w-[85%] bg-white px-4 py-3 rounded-2xl rounded-tl-sm shadow-sm">
+                <p>Hoi! Ik ben Steward, je assistent voor vliegtraining.</p>
+              </div>
+            </div>
+            <div className="flex justify-end">
+              <div className="max-w-[70%] bg-[#1515F5] text-white px-4 py-3 rounded-2xl rounded-tr-sm shadow-sm">
+                <p>Wat kost een vliegopleiding?</p>
+              </div>
+            </div>
+          </div>
+          <UsedIn items={[
+            "All assistant responses (WelcomeScreen, MessageBubble, TypingIndicator)",
+            "All user messages",
+          ]} />
+          <CodeRef>MessageBubble.tsx, WelcomeScreen.tsx, TypingIndicator.tsx</CodeRef>
         </Section>
 
         {/* ===== TAP & TALK ===== */}
