@@ -353,11 +353,17 @@ export default function Chat() {
 
       if (!response.ok) {
         let errorMsg = t("chat.error");
-        try {
-          const data = await response.json();
-          if (data.error) errorMsg = `Error: ${data.error}`;
-        } catch {
-          // Response body empty or not JSON
+        if (response.status === 429) {
+          errorMsg = lang === "nl" ? "Je stuurt te veel berichten. Wacht even en probeer het opnieuw."
+            : lang === "de" ? "Du sendest zu viele Nachrichten. Bitte warte einen Moment."
+            : "You're sending too many messages. Please wait a moment and try again.";
+        } else {
+          try {
+            const data = await response.json();
+            if (data.error) errorMsg = `Error: ${data.error}`;
+          } catch {
+            // Response body empty or not JSON
+          }
         }
         setMessages([...displayMessages, { role: "assistant", content: errorMsg }]);
         return;

@@ -13,6 +13,7 @@ import { getFoldersForRoles, getCapabilitiesForRoles } from "@/lib/role-access";
 import { getUserDocuments, buildDocumentValidityContext, getInstructorBookings, buildScheduleContext } from "@/lib/wings";
 import { chatRequestSchema } from "@/lib/api-schemas";
 import { logger, apiTimer } from "@/lib/logger";
+import { checkRateLimit } from "@/lib/kv-cache";
 
 export const maxDuration = 60;
 
@@ -76,6 +77,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
     }
     const { messages, lang: clientLang, flowContext, roleOverride, userEmail: userEmailOverride } = parsed.data;
+
+    // Rate limiting by IP
+    const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim()
+      || request.headers.get("x-real-ip")
+      || "unknown";
+    const { allowed, remaining } = await checkRateLimit(ip);
+    if (!allowed) {
+      logger.warn("Rate limited", { ip });
+      return NextResponse.json(
+        { error: "Too many requests. Please wait a moment." },
+        { status: 429, headers: { "Retry-After": "60", "X-RateLimit-Remaining": "0" } }
+      );
+    }
 
     const geminiApiKey = process.env.GEMINI_API_KEY;
     if (!geminiApiKey) {

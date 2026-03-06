@@ -433,3 +433,23 @@ export async function setKvSharedChat(id: string, data: KvSharedChat): Promise<b
     return false;
   }
 }
+
+// --- Rate limiting ---
+const RATE_LIMIT_PREFIX = "rl:";
+const RATE_LIMIT_WINDOW = 60;   // 1 minute window
+const RATE_LIMIT_MAX = 15;      // max requests per window
+
+export async function checkRateLimit(ip: string): Promise<{ allowed: boolean; remaining: number }> {
+  try {
+    const r = getRedis();
+    if (!r) return { allowed: true, remaining: RATE_LIMIT_MAX };
+    const key = `${RATE_LIMIT_PREFIX}${ip}`;
+    const count = await r.incr(key);
+    if (count === 1) {
+      await r.expire(key, RATE_LIMIT_WINDOW);
+    }
+    return { allowed: count <= RATE_LIMIT_MAX, remaining: Math.max(0, RATE_LIMIT_MAX - count) };
+  } catch {
+    return { allowed: true, remaining: RATE_LIMIT_MAX };
+  }
+}
