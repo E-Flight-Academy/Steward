@@ -80,33 +80,31 @@ export default function KbStatusBar({ kbStatus, kbExpanded, onToggle, t, current
   const actualRoles = kbStatus?.user?.roles?.length ? kbStatus.user.roles : previewRoles;
 
   // Search customers when input changes (debounced)
+  const searchCustomers = useCallback((q: string) => {
+    setCustomersLoading(true);
+    fetch(`/api/debug/customers?q=${encodeURIComponent(q)}`)
+      .then(r => {
+        if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
+        return r.json();
+      })
+      .then((data) => {
+        setCustomers(Array.isArray(data) ? data : []);
+        setCustomersError(null);
+        setCustomersLoading(false);
+      })
+      .catch((err) => {
+        setCustomersError(err.message);
+        setCustomersLoading(false);
+      });
+  }, []);
+
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     const q = emailInput.trim();
-    if (q.length < 2) {
-      setCustomers([]);
-      setCustomersError(null);
-      return;
-    }
-    setCustomersLoading(true);
-    debounceRef.current = setTimeout(() => {
-      fetch(`/api/debug/customers?q=${encodeURIComponent(q)}`)
-        .then(r => {
-          if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
-          return r.json();
-        })
-        .then((data) => {
-          setCustomers(Array.isArray(data) ? data : []);
-          setCustomersError(null);
-          setCustomersLoading(false);
-        })
-        .catch((err) => {
-          setCustomersError(err.message);
-          setCustomersLoading(false);
-        });
-    }, 300);
+    if (q.length < 2) return;
+    debounceRef.current = setTimeout(() => searchCustomers(q), 300);
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
-  }, [emailInput]);
+  }, [emailInput, searchCustomers]);
 
   // Close dropdown on outside click
   useEffect(() => {
