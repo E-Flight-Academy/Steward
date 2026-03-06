@@ -98,12 +98,16 @@ export async function getAllCustomers(): Promise<AirtableCustomerSummary[]> {
       const fields = ["Client E-Mail", "Name", "Wings Role"].map(f => `fields%5B%5D=${encodeURIComponent(f)}`).join("&");
       const url = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${encodeURIComponent(AIRTABLE_TABLE_NAME)}?${fields}${offset ? `&offset=${offset}` : ""}`;
 
+      console.log(`[Airtable] getAllCustomers page, offset=${offset || "start"}, baseId=${AIRTABLE_BASE_ID}, tokenSet=${!!AIRTABLE_TOKEN}`);
       const response = await fetch(url, {
         headers: { Authorization: `Bearer ${AIRTABLE_TOKEN}` },
         cache: "no-store",
       });
 
-      if (!response.ok) break;
+      if (!response.ok) {
+        console.error(`[Airtable] getAllCustomers failed: ${response.status} ${await response.text()}`);
+        break;
+      }
       const data = await response.json();
 
       for (const rec of data.records) {
