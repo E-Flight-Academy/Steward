@@ -55,8 +55,8 @@ export async function GET(request: NextRequest) {
       roles: userData.roles,
       capabilities,
       wingsUserId: userData.wingsUserId,
-      bookingCount: schedule.bookings.length,
-      bookings: schedule.bookings.slice(0, 5),
+      bookingCount: schedule?.bookings.length ?? 0,
+      bookings: schedule?.bookings.slice(0, 5) ?? [],
     });
   } catch (err) {
     return NextResponse.json({
