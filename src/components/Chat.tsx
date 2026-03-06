@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { useI18n } from "@/lib/i18n/context";
 import type { UiLabels } from "@/lib/i18n/labels";
 const FaqModal = lazy(() => import("./FaqModal"));
-import type { Message, FlowOption, FlowStep } from "@/types/chat";
+import type { Message, FlowOption, FlowStep, StructuredContent, CardAction } from "@/types/chat";
 import { fetchRetry } from "@/lib/fetch-retry";
 
 import { useKbStatus } from "@/hooks/useKbStatus";
@@ -69,6 +69,17 @@ export default function Chat() {
     scrollToBottom();
     if (!isTouchDevice) inputRef.current?.focus();
   }, [messages, isTouchDevice]);
+
+  // Browser back button: undo last booking detail navigation
+  useEffect(() => {
+    const handlePopState = (e: PopStateEvent) => {
+      if (e.state?.messageCount != null) {
+        setMessages((prev) => prev.slice(0, e.state.messageCount));
+      }
+    };
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
 
   // Resize container to visual viewport so input stays above iOS keyboard
   const shellRef = useRef<HTMLDivElement>(null);
@@ -200,9 +211,12 @@ export default function Chat() {
 
   // sendMessage must be declared before useFlow (which needs it as a parameter)
   // We use a ref to break the circular dependency
-  const sendMessageRef = useRef<(text: string, baseMessages?: Message[], hidden?: boolean) => Promise<void>>(async () => {});
+  const sendMessageRef = useRef<(text: string, baseMessages?: Message[], hidden?: boolean, focused?: boolean) => Promise<void>>(async () => {});
+  const capabilityActionRef = useRef<(action: string) => void>(() => {});
+  const loginRef = useRef<() => void>(() => {});
 
   const {
+    flowSteps,
     setFlowSteps,
     flowPhase,
     setFlowPhase,
@@ -225,6 +239,8 @@ export default function Chat() {
     sendMessage: (...args) => sendMessageRef.current(...args),
     switchLanguage,
     sharedChatIdRef,
+    onCapabilityAction: (action) => capabilityActionRef.current(action),
+    onLogin: () => loginRef.current(),
   });
 
   const { faqSuggestions, selectedSuggestion, setSelectedSuggestion } = useFaqSuggestions(input, faqs, starters, getQ);
@@ -262,7 +278,7 @@ export default function Chat() {
     handleAdminInput,
   } = useFaqAdmin({ faqs, setFaqs, setMessages, lang });
 
-  const sendMessage = useCallback(async (text: string, baseMessages?: Message[], hidden = false) => {
+  const sendMessage = useCallback(async (text: string, baseMessages?: Message[], hidden = false, focused = false) => {
     if (!text.trim()) return;
 
     // Intercept for FAQ admin flow
@@ -355,7 +371,7 @@ export default function Chat() {
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: apiMessages, lang: lang || "en", flowContext, roleOverride, userEmail: userEmailOverride }),
+        body: JSON.stringify({ messages: apiMessages, lang: lang || "en", flowContext, roleOverride, userEmail: userEmailOverride, ...(focused && { focused: true }) }),
         signal: controller.signal,
       });
 
@@ -467,6 +483,96 @@ export default function Chat() {
   // Keep the ref in sync
   sendMessageRef.current = sendMessage;
 
+  const handleCapabilityAction = useCallback(async (action: string) => {
+    setIsLoading(true);
+    setProgressSteps([]);
+    setFlowPhase("completed");
+    setCurrentFlowStep(null);
+    try {
+      const params: Record<string, unknown> = { action };
+      if (userEmailOverride) params.userEmail = userEmailOverride;
+      if (roleOverride) params.roleOverride = roleOverride;
+      const res = await fetch("/api/capability-action", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(params),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Failed to load data");
+      }
+      const structured: StructuredContent = await res.json();
+      setMessages((prev) => [...prev, {
+        role: "assistant",
+        content: structured.summary,
+        structured,
+      }]);
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : "Something went wrong";
+      setMessages((prev) => [...prev, { role: "assistant", content: errorMsg }]);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [userEmailOverride, roleOverride, setFlowPhase, setCurrentFlowStep]);
+
+  capabilityActionRef.current = handleCapabilityAction;
+
+  // Card actions from flow steps with trigger
+  const bookingDetailActions = useMemo<CardAction[]>(() =>
+    flowSteps
+      .filter((s) => s.trigger?.split(",").includes("booking-detail"))
+      .map((s) => ({ name: s.name, label: s.message || s.name, icon: null, contextKey: s.contextKey, endPrompt: s.endPrompt })),
+    [flowSteps]
+  );
+
+  const handleCardAction = useCallback(async (action: CardAction, context: Record<string, string>) => {
+    setIsLoading(true);
+    setProgressSteps([]);
+    try {
+      // 1. Fetch data via capability action
+      const params: Record<string, unknown> = {
+        action: action.contextKey,
+        studentUserId: context.studentUserId ? Number(context.studentUserId) : undefined,
+        studentName: context.studentName,
+        bookingId: context.bookingId ? Number(context.bookingId) : undefined,
+        previousLessonBookingId: context.previousLessonBookingId ? Number(context.previousLessonBookingId) : undefined,
+      };
+      if (userEmailOverride) params.userEmail = userEmailOverride;
+      if (roleOverride) params.roleOverride = roleOverride;
+
+      const res = await fetch("/api/capability-action", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(params),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Failed to load data");
+      }
+      const result = await res.json();
+
+      // 2. Send the endPrompt + context to Gemini via chat
+      const replacePlaceholders = (s: string) => s.replace(/\{(\w+)\}/g, (_, key) => {
+        if (key === "context") return result.context || "";
+        return context[key] || key;
+      });
+      const prompt = replacePlaceholders(action.endPrompt);
+
+      // Add a user message to show the action was triggered
+      const label = replacePlaceholders(action.label);
+      const userMsg: Message = { role: "user", content: `${label} — ${context.studentName || ""}` };
+      setMessages((prev) => [...prev, userMsg]);
+
+      // Send to Gemini
+      await sendMessageRef.current(prompt, [...messages, userMsg], true, true);
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : "Something went wrong";
+      setMessages((prev) => [...prev, { role: "assistant", content: errorMsg }]);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [userEmailOverride, roleOverride, messages]);
+
   // Initial data fetch
   useEffect(() => {
     if (!isTouchDevice) inputRef.current?.focus();
@@ -564,6 +670,7 @@ export default function Chat() {
       window.location.href = "/api/auth/shopify/login";
     }
   };
+  loginRef.current = handleShopifyLogin;
 
   const handleShopifyLogout = async () => {
     await fetch("/api/auth/shopify/logout", { method: "POST" });
@@ -721,6 +828,42 @@ export default function Chat() {
     }, isListening ? 200 : 0);
   }, [isListening, listeningLang, lang, switchLanguage, toggleMic]);
 
+  const handleBookingClick = useCallback(async (bookingId: number, date: string, time: string, student: string) => {
+    const formatted = new Date(date + "T00:00:00").toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" });
+    const userMsg: Message = { role: "user", content: `Details of the lesson of ${formatted} ${time} ${student}` };
+    setMessages((prev) => {
+      window.history.pushState({ messageCount: prev.length }, "");
+      return [...prev, userMsg];
+    });
+    setIsLoading(true);
+    setProgressSteps([]);
+    try {
+      const params: Record<string, unknown> = { action: "booking-detail", bookingId };
+      if (userEmailOverride) params.userEmail = userEmailOverride;
+      if (roleOverride) params.roleOverride = roleOverride;
+      const res = await fetch("/api/capability-action", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(params),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Failed to load booking details");
+      }
+      const structured: StructuredContent = await res.json();
+      setMessages((prev) => [...prev, {
+        role: "assistant",
+        content: structured.summary,
+        structured,
+      }]);
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : "Something went wrong";
+      setMessages((prev) => [...prev, { role: "assistant", content: errorMsg }]);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [userEmailOverride, roleOverride]);
+
   const handleAvatarClick = useCallback(() => {
     const question = lang === "nl" ? "Wie is Steward?" : lang === "de" ? "Wer ist Steward?" : "Who is Steward?";
     sendMessage(question);
@@ -788,6 +931,7 @@ export default function Chat() {
             listeningLang={listeningLang}
             kiosk={isKiosk}
             capabilities={capabilities}
+            isLoggedIn={!!shopifyUser}
           />
         )}
 
@@ -823,6 +967,10 @@ export default function Chat() {
             lang={lang}
             progressSteps={progressSteps}
             capabilities={capabilities}
+            isLoggedIn={!!shopifyUser}
+            onBookingClick={handleBookingClick}
+            cardActions={bookingDetailActions}
+            onCardAction={handleCardAction}
           />
         )}
 

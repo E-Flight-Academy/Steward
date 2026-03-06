@@ -10,7 +10,6 @@ interface Faq {
   answerNl: string;
   answerDe: string;
   category: string[];
-  audience: string[];
 }
 
 interface FaqModalProps {
@@ -36,9 +35,7 @@ const getColorForCategory = (cat: string) => {
 export default function FaqModal({ faqs, lang, onClose, onSelectFaq }: FaqModalProps) {
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-  const [selectedAudience, setSelectedAudience] = useState<string | null>(null);
   const [categoryOpen, setCategoryOpen] = useState(false);
-  const [audienceOpen, setAudienceOpen] = useState(false);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -59,22 +56,16 @@ export default function FaqModal({ faqs, lang, onClose, onSelectFaq }: FaqModalP
     return [...new Set(cats)].sort();
   }, [faqs]);
 
-  const audiences = useMemo(() => {
-    const auds = faqs.flatMap((f) => f.audience).filter(Boolean);
-    return [...new Set(auds)].sort();
-  }, [faqs]);
-
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
     return faqs.filter((faq) => {
       const question = getQ(faq).toLowerCase();
       const matchesSearch = !q || question.includes(q);
       const matchesCategory = !selectedCategory || faq.category.includes(selectedCategory);
-      const matchesAudience = !selectedAudience || faq.audience.includes(selectedAudience);
-      return matchesSearch && matchesCategory && matchesAudience;
+      return matchesSearch && matchesCategory;
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [faqs, search, selectedCategory, selectedAudience, lang]);
+  }, [faqs, search, selectedCategory, lang]);
 
   return (
     <div
@@ -116,14 +107,13 @@ export default function FaqModal({ faqs, lang, onClose, onSelectFaq }: FaqModalP
         </div>
 
         {/* Filters */}
-        {(categories.length > 0 || audiences.length > 0) && (
+        {categories.length > 0 && (
           <div className="px-6 py-3 border-b border-[#ECECEC]">
             <div className="flex gap-3">
               {/* Category dropdown */}
-              {categories.length > 0 && (
-                <div className="relative flex-1">
+              <div className="relative flex-1">
                   <button
-                    onClick={() => { setCategoryOpen(!categoryOpen); setAudienceOpen(false); }}
+                    onClick={() => { setCategoryOpen(!categoryOpen); }}
                     aria-expanded={categoryOpen}
                     className="w-full flex items-center justify-between px-4 py-2.5 rounded-xl text-sm font-medium transition-colors bg-[#F7F7F7] text-[#1A1A1A] hover:bg-[#ECECEC] border border-[#ECECEC] cursor-pointer"
                   >
@@ -174,60 +164,6 @@ export default function FaqModal({ faqs, lang, onClose, onSelectFaq }: FaqModalP
                     </>
                   )}
                 </div>
-              )}
-
-              {/* Audience dropdown */}
-              {audiences.length > 0 && (
-                <div className="relative flex-1">
-                  <button
-                    onClick={() => { setAudienceOpen(!audienceOpen); setCategoryOpen(false); }}
-                    aria-expanded={audienceOpen}
-                    className="w-full flex items-center justify-between px-4 py-2.5 rounded-xl text-sm font-medium transition-colors bg-[#F7F7F7] text-[#1A1A1A] hover:bg-[#ECECEC] border border-[#ECECEC] cursor-pointer"
-                  >
-                    <span className="truncate">{selectedAudience || "Everybody"}</span>
-                    <svg
-                      className={`w-4 h-4 ml-2 flex-shrink-0 transition-transform ${audienceOpen ? "rotate-180" : ""}`}
-                      aria-hidden="true"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      viewBox="0 0 24 24"
-                    >
-                      <path d="m6 9 6 6 6-6" />
-                    </svg>
-                  </button>
-                  {audienceOpen && (
-                    <>
-                      <div className="fixed inset-0 z-10" onClick={() => setAudienceOpen(false)} />
-                      <div className="absolute left-0 top-full mt-1 w-full bg-white border border-[#ECECEC] rounded-xl shadow-lg z-20 max-h-60 overflow-y-auto">
-                        <button
-                          onClick={() => { setSelectedAudience(null); setAudienceOpen(false); }}
-                          className={`w-full text-left px-4 py-2.5 text-sm font-medium transition-colors cursor-pointer first:rounded-t-xl last:rounded-b-xl ${
-                            selectedAudience === null
-                              ? "bg-[#1515F5] text-white"
-                              : "text-[#1A1A1A] hover:bg-[#F7F7F7]"
-                          }`}
-                        >
-                          Everybody
-                        </button>
-                        {audiences.map((aud) => (
-                          <button
-                            key={aud}
-                            onClick={() => { setSelectedAudience(aud); setAudienceOpen(false); }}
-                            className={`w-full text-left px-4 py-2.5 text-sm font-medium transition-colors cursor-pointer first:rounded-t-xl last:rounded-b-xl ${
-                              selectedAudience === aud
-                                ? "bg-[#1515F5] text-white"
-                                : "text-[#1A1A1A] hover:bg-[#F7F7F7]"
-                            }`}
-                          >
-                            {aud}
-                          </button>
-                        ))}
-                      </div>
-                    </>
-                  )}
-                </div>
-              )}
             </div>
           </div>
         )}
@@ -262,11 +198,6 @@ export default function FaqModal({ faqs, lang, onClose, onSelectFaq }: FaqModalP
                         {faq.category.length > 0 && (
                           <span className={`text-xs font-medium px-2 py-1 rounded-md ${colors.text} bg-white/60`}>
                             {faq.category.join(", ")}
-                          </span>
-                        )}
-                        {faq.audience.length > 0 && faq.audience[0] && (
-                          <span className="text-xs font-medium text-[#6B6B6B] bg-white/60 px-2 py-1 rounded-md">
-                            {faq.audience[0]}
                           </span>
                         )}
                       </div>

@@ -6,13 +6,17 @@ interface FlowOptionsProps {
   getFlowLabel: (option: FlowOption) => string;
   kiosk?: boolean;
   capabilities?: string[];
+  isLoggedIn?: boolean;
 }
 
-export default function FlowOptions({ options, onSelect, getFlowLabel, kiosk, capabilities = [] }: FlowOptionsProps) {
-  // Filter out options that require a capability the user doesn't have
-  const visibleOptions = options.filter(
-    (o) => !o.capability || capabilities.includes(o.capability)
-  );
+export default function FlowOptions({ options, onSelect, getFlowLabel, kiosk, capabilities = [], isLoggedIn }: FlowOptionsProps) {
+  // Filter out options that require a capability the user doesn't have,
+  // and hide Login options when already logged in
+  const visibleOptions = options.filter((o) => {
+    if (o.capability && !capabilities.includes(o.capability)) return false;
+    if (o.endAction === "Login" && isLoggedIn) return false;
+    return true;
+  });
 
   return (
     <div role="group" aria-label="Options" className="flex flex-wrap gap-2">

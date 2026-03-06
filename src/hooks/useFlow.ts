@@ -15,6 +15,8 @@ interface UseFlowParams {
   sendMessage: (text: string, baseMessages?: Message[], hidden?: boolean) => Promise<void>;
   switchLanguage: (lang: string) => Promise<void>;
   sharedChatIdRef: React.MutableRefObject<string | null>;
+  onCapabilityAction?: (action: string) => void;
+  onLogin?: () => void;
 }
 
 /** Find the best welcome step for the user's roles. Tries welcome_{role} first, falls back to welcome. */
@@ -40,6 +42,8 @@ export function useFlow({
   sendMessage,
   switchLanguage,
   sharedChatIdRef,
+  onCapabilityAction,
+  onLogin,
 }: UseFlowParams) {
   const [flowSteps, setFlowSteps] = useState<FlowStep[]>([]);
   const [flowPhase, setFlowPhase] = useState<FlowPhase>("loading");
@@ -140,6 +144,19 @@ export function useFlow({
     const userMsg: Message = { role: "user", content: displayLabel };
 
     // Check if flow should end after this step
+    if (currentFlowStep.endAction === "Login") {
+      onLogin?.();
+      return;
+    }
+
+    if (currentFlowStep.endAction === "Capability Action") {
+      setMessages([...messages, userMsg]);
+      if (onCapabilityAction && currentFlowStep.contextKey) {
+        onCapabilityAction(currentFlowStep.contextKey);
+      }
+      return;
+    }
+
     if (currentFlowStep.endAction === "Start AI Chat") {
       setFlowPhase("completed");
       setCurrentFlowStep(null);
@@ -175,6 +192,21 @@ export function useFlow({
       setFlowPhase("completed");
       setCurrentFlowStep(null);
       setMessages((prev) => [...prev, userMsg]);
+      return;
+    }
+
+    // If the next step triggers login
+    if (nextStep.endAction === "Login") {
+      onLogin?.();
+      return;
+    }
+
+    // If the next step triggers a capability action
+    if (nextStep.endAction === "Capability Action") {
+      setMessages([...messages, userMsg]);
+      if (onCapabilityAction && nextStep.contextKey) {
+        onCapabilityAction(nextStep.contextKey);
+      }
       return;
     }
 
@@ -222,7 +254,7 @@ export function useFlow({
     const baseMessages = [...messages, userMsg];
     setMessages(baseMessages);
     showWithThinkingDelay(baseMessages, getFlowMessage(nextStep));
-  }, [currentFlowStep, flowContext, flowSteps, messages, setMessages, getFlowMessage, getFlowLabel, getFlowEndPrompt, getFlowFaqQuestion, getFlowFaqAnswer, showWithThinkingDelay, sendMessage]);
+  }, [currentFlowStep, flowContext, flowSteps, messages, setMessages, getFlowMessage, getFlowLabel, getFlowEndPrompt, getFlowFaqQuestion, getFlowFaqAnswer, showWithThinkingDelay, sendMessage, onCapabilityAction, onLogin]);
 
   const handleNewChat = useCallback((inputRef: React.RefObject<HTMLTextAreaElement | null>, setInput: (v: string) => void) => {
     if (messages.length === 0) return;

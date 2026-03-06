@@ -378,35 +378,8 @@ export async function getRelevantDocuments(
       .map((m) => `=== ${m.fileName} (excerpt) ===\n${m.text}`)
       .join("\n\n");
 
-    // Always include full text of small documents (reference sheets, checklists, etc.)
-    // These are too small for RAG to find reliably but contain critical information.
-    const SMALL_FILE_THRESHOLD = 6400; // ~2 chunks worth of text
-    const smallDocParts: string[] = [];
-    const ragFileNames = new Set(relevant.map((m) => m.fileName));
-
-    if (cachedFiles.length > 0) {
-      const accessibleFiles = filterFilesByFolder(cachedFiles, allowedFolders);
-      const smallTextFiles = accessibleFiles.filter(
-        (f) => f.isText && f.content.length > 0 && f.content.length <= SMALL_FILE_THRESHOLD
-      );
-
-      for (const f of smallTextFiles) {
-        if (!ragFileNames.has(f.name)) {
-          smallDocParts.push(`=== ${f.name} ===\n${f.content}`);
-          ragFileNames.add(f.name);
-        }
-      }
-
-      if (smallDocParts.length > 0) {
-        console.log(`RAG: appending ${smallDocParts.length} small documents in full`);
-      }
-    }
-
-    const systemInstructionText = smallDocParts.length > 0
-      ? ragParts + "\n\n=== Reference Documents (full text) ===\n\n" + smallDocParts.join("\n\n")
-      : ragParts;
-
-    const relevantSourceFiles = [...ragFileNames];
+    const systemInstructionText = ragParts;
+    const relevantSourceFiles = [...new Set(relevant.map((m) => m.fileName))];
 
     return { systemInstructionText, sourceFiles: relevantSourceFiles };
   } catch (err) {

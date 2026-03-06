@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import type { Message, FlowOption, FlowStep } from "@/types/chat";
+import type { Message, FlowOption, FlowStep, CardAction } from "@/types/chat";
 import type { UiLabels } from "@/lib/i18n/labels";
 import type { FaqAdminPhase, FaqAdminAction } from "@/hooks/useFaqAdmin";
 import MessageBubble from "./MessageBubble";
@@ -42,6 +42,10 @@ interface MessageListProps {
   lang?: string;
   progressSteps?: string[];
   capabilities?: string[];
+  isLoggedIn?: boolean;
+  onBookingClick?: (bookingId: number, date: string, time: string, student: string) => void;
+  cardActions?: CardAction[];
+  onCardAction?: (action: CardAction, context: Record<string, string>) => void;
 }
 
 export default function MessageList({
@@ -75,6 +79,10 @@ export default function MessageList({
   lang = "en",
   progressSteps = [],
   capabilities = [],
+  isLoggedIn,
+  onBookingClick,
+  cardActions,
+  onCardAction,
 }: MessageListProps) {
   return (
     <div role="log" aria-live="polite" aria-label="Chat messages" className="space-y-4">
@@ -86,6 +94,7 @@ export default function MessageList({
           onRate={onRate}
           onFaqClick={onFaqClick}
           onAvatarClick={onAvatarClick}
+          onBookingClick={onBookingClick}
           t={t}
           kiosk={kiosk}
         />
@@ -215,9 +224,53 @@ export default function MessageList({
                 getFlowLabel={getFlowLabel}
                 kiosk={kiosk}
                 capabilities={capabilities}
+                isLoggedIn={isLoggedIn}
               />
             </div>
           )}
+
+          {flowPhase !== "active" && !isLoading && cardActions && cardActions.length > 0 && onCardAction && (() => {
+            // Find the last booking-detail message
+            const lastBd = [...messages].reverse().find(
+              (m) => m.structured?.type === "booking-detail"
+            );
+            if (!lastBd?.structured || lastBd.structured.type !== "booking-detail") return null;
+            const bd = lastBd.structured.data;
+            const ctx: Record<string, string> = {
+              studentName: bd.student,
+              studentUserId: String(bd.studentUserId || ""),
+              bookingId: String(bd.id),
+              date: bd.date,
+            };
+            if (bd.previousLesson) {
+              ctx.previousLessonBookingId = String(bd.previousLesson.bookingId);
+              ctx.previousLessonPlan = bd.previousLesson.planName || "lesson";
+              ctx.previousLessonDate = bd.previousLesson.date;
+            }
+            const visibleActions = cardActions.filter((a) => {
+              if (a.contextKey === "lesson-summary" && !bd.previousLesson) return false;
+              return true;
+            });
+            if (visibleActions.length === 0) return null;
+            return (
+              <div className="max-w-4xl mx-auto w-full pl-11 flex flex-wrap gap-2">
+                {visibleActions.map((action, i) => {
+                  const label = action.label.replace(/\{(\w+)\}/g, (_, key) => ctx[key as string] || key);
+                  return (
+                    <button
+                      key={action.name}
+                      onClick={() => onCardAction(action, ctx)}
+                      className={`font-semibold rounded-full border border-[#ECECEC] bg-[#F7F7F7] text-[#030213] hover:bg-[#1515F5] hover:text-white hover:border-[#1515F5] transition-colors flex items-center gap-1.5 cursor-pointer animate-pop-in ${kiosk ? "text-lg px-5 py-3" : "text-base px-4 py-2"}`}
+                      style={{ animationDelay: `${i * 100}ms` }}
+                    >
+                      {action.icon && <span>{action.icon}</span>}
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+            );
+          })()}
 
           {feedbackFollowUpLogId && !isLoading && (
             <FeedbackFollowUp

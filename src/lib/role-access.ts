@@ -52,7 +52,7 @@ async function fetchRoleAccessFromNotion(): Promise<KvRoleMapping[]> {
     }
 
     if (role) {
-      mappings.push({ role, folders, capabilities });
+      mappings.push({ notionPageId: page.id, role, folders, capabilities });
     }
   }
 

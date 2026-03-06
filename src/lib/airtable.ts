@@ -11,6 +11,8 @@ interface AirtableRecord {
     "Wings Role"?: string[];
     Name?: string[];
     "Wings User ID"?: number;
+    "E-Mail 2"?: string;
+    "Wings User ID 2"?: number;
   };
 }
 
@@ -33,8 +35,9 @@ export async function getUserData(email: string): Promise<AirtableUserData> {
   }
 
   try {
-    const formula = `LOWER({Client E-Mail}) = LOWER("${email.replace(/"/g, '\\"')}")`;
-    const fields = ["Wings Role", "Client E-Mail", "Wings User ID"].map(f => `fields%5B%5D=${encodeURIComponent(f)}`).join("&");
+    const safeEmail = email.replace(/"/g, '\\"');
+    const formula = `OR(LOWER({Client E-Mail}) = LOWER("${safeEmail}"), LOWER({E-Mail 2}) = LOWER("${safeEmail}"))`;
+    const fields = ["Wings Role", "Client E-Mail", "Wings User ID", "E-Mail 2", "Wings User ID 2"].map(f => `fields%5B%5D=${encodeURIComponent(f)}`).join("&");
     const url = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${encodeURIComponent(AIRTABLE_TABLE_NAME)}?filterByFormula=${encodeURIComponent(formula)}&${fields}`;
 
     console.log(`[Airtable] Looking up email: ${email}, base: ${AIRTABLE_BASE_ID}, table: ${AIRTABLE_TABLE_NAME}`);
@@ -61,8 +64,11 @@ export async function getUserData(email: string): Promise<AirtableUserData> {
 
     const record = data.records[0].fields;
     const roles = record["Wings Role"] || [];
-    const wingsUserId = record["Wings User ID"] ?? null;
-    console.log(`Found data for ${email}: roles=[${roles.join(", ")}], wingsUserId=${wingsUserId}`);
+    const matchedViaAlt = record["E-Mail 2"]?.toLowerCase() === email.toLowerCase();
+    const wingsUserId = matchedViaAlt
+      ? (record["Wings User ID 2"] ?? record["Wings User ID"] ?? null)
+      : (record["Wings User ID"] ?? null);
+    console.log(`Found data for ${email}: roles=[${roles.join(", ")}], wingsUserId=${wingsUserId}${matchedViaAlt ? " (via E-Mail 2)" : ""}`);
     return { roles, wingsUserId };
   } catch (error) {
     console.error("Failed to fetch data from Airtable:", error);
@@ -93,8 +99,8 @@ export async function searchCustomers(query: string): Promise<AirtableCustomerSu
   }
 
   const q = query.replace(/"/g, '\\"');
-  const formula = `OR(FIND(LOWER("${q}"), LOWER({Client E-Mail})), FIND(LOWER("${q}"), LOWER(ARRAYJOIN({Name}))))`;
-  const fields = ["Client E-Mail", "Name", "Wings Role"].map(f => `fields%5B%5D=${encodeURIComponent(f)}`).join("&");
+  const formula = `OR(FIND(LOWER("${q}"), LOWER({Client E-Mail})), FIND(LOWER("${q}"), LOWER(ARRAYJOIN({Name}))), FIND(LOWER("${q}"), LOWER({E-Mail 2})))`;
+  const fields = ["Client E-Mail", "Name", "Wings Role", "E-Mail 2"].map(f => `fields%5B%5D=${encodeURIComponent(f)}`).join("&");
   const url = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${encodeURIComponent(AIRTABLE_TABLE_NAME)}?filterByFormula=${encodeURIComponent(formula)}&maxRecords=10&${fields}`;
 
   console.log(`[Airtable] searchCustomers: q="${query}", base=${AIRTABLE_BASE_ID}, token=${AIRTABLE_TOKEN ? "set" : "missing"}`);

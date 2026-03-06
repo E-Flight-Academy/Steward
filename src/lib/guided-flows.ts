@@ -44,7 +44,7 @@ export async function fetchFlowsFromNotion(): Promise<KvFlowStep[]> {
       let name = "";
       let label = "";
       let message = "";
-      let endAction: "Continue Flow" | "Start AI Chat" = "Continue Flow";
+      let endAction: "Continue Flow" | "Start AI Chat" | "Capability Action" | "Login" = "Continue Flow";
       let contextKey = "";
       let endPrompt = "";
       let order = 0;
@@ -52,6 +52,7 @@ export async function fetchFlowsFromNotion(): Promise<KvFlowStep[]> {
       let relatedFaqId: string | null = null;
       let icon: string | null = null;
       let capability: string | null = null;
+      let trigger: string | null = null;
 
       // Extract page icon
       const pageIcon = (page as { icon?: { type: string; emoji?: string; external?: { url: string }; file?: { url: string } } }).icon;
@@ -80,7 +81,7 @@ export async function fetchFlowsFromNotion(): Promise<KvFlowStep[]> {
         }
         if (key === "End Action" && v.type === "select" && v.select) {
           const val = (v.select as { name: string }).name;
-          if (val === "Start AI Chat" || val === "Continue Flow") endAction = val;
+          if (val === "Start AI Chat" || val === "Continue Flow" || val === "Capability Action" || val === "Login") endAction = val;
         }
         if (key === "Context Key" && v.type === "rich_text" && Array.isArray(v.rich_text) && v.rich_text.length > 0) {
           contextKey = (v.rich_text as { plain_text: string }[]).map((t) => t.plain_text).join("");
@@ -98,9 +99,13 @@ export async function fetchFlowsFromNotion(): Promise<KvFlowStep[]> {
         if (key === "Capability" && v.type === "select" && v.select) {
           capability = ((v.select as { name: string }).name || "").trim().toLowerCase() || null;
         }
+        if (key === "Trigger" && v.type === "multi_select" && Array.isArray(v.multi_select)) {
+          const names = (v.multi_select as { name: string }[]).map((o) => o.name.trim().toLowerCase()).filter(Boolean);
+          trigger = names.length > 0 ? names.join(",") : null;
+        }
       }
 
-      return { pageId, name, label, icon, message, endAction, contextKey, endPrompt, order, nextStepNames, relatedFaqId, capability };
+      return { pageId, name, label, icon, message, endAction, contextKey, endPrompt, order, nextStepNames, relatedFaqId, capability, trigger };
     });
 
   // Collect FAQ page IDs to fetch in parallel
@@ -193,11 +198,12 @@ export async function fetchFlowsFromNotion(): Promise<KvFlowStep[]> {
         labelDe: "",
         icon: target.icon,
         capability: target.capability,
+        endAction: target.endAction,
       });
     }
 
-    if (p.name && (p.message || p.endAction === "Start AI Chat")) {
-      steps.push({ name: p.name, message: p.message, messageNl: "", messageDe: "", nextDialogFlow, endAction: p.endAction, contextKey: p.contextKey, endPrompt: p.endPrompt, endPromptNl: "", endPromptDe: "", relatedFaqQuestion, relatedFaqQuestionNl, relatedFaqQuestionDe, relatedFaqAnswer, relatedFaqAnswerNl, relatedFaqAnswerDe, relatedFaqUrl, order: p.order });
+    if (p.name && (p.message || p.endAction === "Start AI Chat" || p.endAction === "Capability Action" || p.endAction === "Login" || p.trigger)) {
+      steps.push({ name: p.name, message: p.message, messageNl: "", messageDe: "", nextDialogFlow, endAction: p.endAction, contextKey: p.contextKey, endPrompt: p.endPrompt, endPromptNl: "", endPromptDe: "", relatedFaqQuestion, relatedFaqQuestionNl, relatedFaqQuestionDe, relatedFaqAnswer, relatedFaqAnswerNl, relatedFaqAnswerDe, relatedFaqUrl, order: p.order, trigger: p.trigger });
     }
   }
 

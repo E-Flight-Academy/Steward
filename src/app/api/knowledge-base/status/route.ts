@@ -4,6 +4,7 @@ import { getSession } from "@/lib/shopify-auth";
 import { getUserData } from "@/lib/airtable";
 import { getFoldersForRoles, getCapabilitiesForRoles } from "@/lib/role-access";
 import { getConfig } from "@/lib/config";
+import { getFaqs } from "@/lib/faq";
 
 export async function GET(request: NextRequest) {
   const status = await getKnowledgeBaseStatus();
@@ -41,14 +42,15 @@ export async function GET(request: NextRequest) {
     if (canOverride && (overrideUser || overrideRole)) {
       // Debug override: impersonate another user/role
       isOverride = true;
+      const overrideRoles = overrideRole ? overrideRole.split(",").filter(Boolean) : [];
       if (overrideUser) {
         userEmail = overrideUser;
         const userData = await getUserData(overrideUser);
         // If role override is also set, use that instead of Airtable roles
-        userRoles = overrideRole ? [overrideRole] : userData.roles;
-      } else if (overrideRole) {
+        userRoles = overrideRoles.length > 0 ? overrideRoles : userData.roles;
+      } else if (overrideRoles.length > 0) {
         userEmail = sessionEmail;
-        userRoles = [overrideRole];
+        userRoles = overrideRoles;
       }
       allowedFolders = await getFoldersForRoles(userRoles);
       userCapabilities = await getCapabilitiesForRoles(userRoles);
@@ -68,8 +70,22 @@ export async function GET(request: NextRequest) {
     // Not logged in
   }
 
+  // Filter FAQ count by role
+  let filteredFaqCount = status.faqCount;
+  try {
+    const faqs = await getFaqs(true);
+    const normalizedRoles = userRoles.map((r) => r.toLowerCase());
+    const accessibleFaqs = faqs.filter((f) =>
+      f.audience.length === 0 || f.audience.some((a) => normalizedRoles.includes(a))
+    );
+    filteredFaqCount = accessibleFaqs.length;
+  } catch {
+    // Fall back to total count
+  }
+
   return NextResponse.json({
     ...status,
+    faqCount: filteredFaqCount,
     searchOrder: config?.search_order ?? ["faq", "drive"],
     user: { email: userEmail, roles: userRoles, folders: allowedFolders, capabilities: userCapabilities, ...(isOverride ? { override: true } : {}) },
     filteredFileCount: filteredFileNames.length,

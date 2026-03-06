@@ -40,6 +40,7 @@ interface WelcomeScreenProps {
   listeningLang?: string | null;
   kiosk?: boolean;
   capabilities?: string[];
+  isLoggedIn?: boolean;
 }
 
 export default function WelcomeScreen({
@@ -77,6 +78,7 @@ export default function WelcomeScreen({
   listeningLang,
   kiosk,
   capabilities = [],
+  isLoggedIn,
 }: WelcomeScreenProps) {
   return (
     <div className="w-full max-w-2xl px-1 sm:px-4 space-y-3 sm:space-y-6">
@@ -129,6 +131,7 @@ export default function WelcomeScreen({
             getFlowLabel={getFlowLabel}
             kiosk={kiosk}
             capabilities={capabilities}
+            isLoggedIn={isLoggedIn}
           />
         </div>
       )}

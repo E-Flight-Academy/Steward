@@ -97,6 +97,17 @@ export interface WingsUserDocuments {
   documents: WingsDocument[];
 }
 
+export interface WingsLessonPlan {
+  name: string;
+  isAssessment: boolean;
+}
+
+export interface WingsLesson {
+  id: number;
+  plan: WingsLessonPlan | null;
+  status: { name: string } | null;
+}
+
 export interface WingsBooking {
   id: number;
   from: string;
@@ -105,14 +116,32 @@ export interface WingsBooking {
   eventTitle: string | null;
   type: { name: string };
   status: { name: string };
+  user: { id: number; name: string } | null;
   customer: { id: number; name: string } | null;
   instructor: { id: number; name: string } | null;
   aircraft: { callSign: string } | null;
+  lessons: WingsLesson[];
 }
 
 export interface WingsSchedule {
   userId: number;
   bookings: WingsBooking[];
+}
+
+export interface WingsAircraftRemark {
+  id: number;
+  remark: string | null;
+  details: string | null;
+  phase: string | null;
+  createdAt: string;
+  releasedAt: string | null;
+}
+
+export interface WingsAircraftStatus {
+  callSign: string;
+  serviceable: boolean;
+  documents: WingsDocument[];
+  remarks: WingsAircraftRemark[];
 }
 
 // --- Queries ---
@@ -148,9 +177,320 @@ query GetInstructorBookings($userId: Int!, $startDate: String!, $endDate: String
       eventTitle
       type { name }
       status { name }
+      user { id name }
       customer { id name }
       instructor { id name }
       aircraft { callSign }
+      lessons { id plan { name isAssessment } status { name } }
+    }
+  }
+}
+`;
+
+const BOOKING_DETAIL_QUERY = `
+query GetBookingDetail($bookingId: Int!) {
+  bookings(first: 1, filter: { id: $bookingId }) {
+    data {
+      id
+      from
+      to
+      eventTitle
+      comments
+      type { name }
+      status { name }
+      user { id name email }
+      customer { id name email }
+      instructor { id name }
+      aircraft { callSign }
+      lessons {
+        id
+        comments
+        plan { name isAssessment description prep briefing }
+        status { name }
+        flights {
+          id
+          depart { name icaoName }
+          arrive { name icaoName }
+          offBlock
+          onBlock
+          airborne
+          touchdown
+          comments
+        }
+        records {
+          id
+          score
+          comments
+          objective { summary category { name } }
+        }
+      }
+      report { id remarks landings fuelLtrs }
+    }
+  }
+}
+`;
+
+export interface WingsBookingDetail {
+  id: number;
+  from: string;
+  to: string;
+  eventTitle: string | null;
+  comments: string | null;
+  type: { name: string };
+  status: { name: string };
+  user: { id: number; name: string; email: string | null } | null;
+  customer: { id: number; name: string; email: string | null } | null;
+  instructor: { id: number; name: string } | null;
+  aircraft: { callSign: string } | null;
+  lessons: {
+    id: number;
+    comments: string | null;
+    plan: { name: string; isAssessment: boolean; description: string | null; prep: string | null; briefing: string | null } | null;
+    status: { name: string } | null;
+    flights: {
+      id: number;
+      depart: { name: string; icaoName: string } | null;
+      arrive: { name: string; icaoName: string } | null;
+      offBlock: string | null;
+      onBlock: string | null;
+      airborne: string | null;
+      touchdown: string | null;
+      comments: string | null;
+    }[];
+    records: {
+      id: number;
+      score: number | null;
+      comments: string | null;
+      objective: { summary: string; category: { name: string } | null } | null;
+    }[];
+  }[];
+  report: { id: number; remarks: string | null; landings: number | null; fuelLtrs: number | null } | null;
+}
+
+/**
+ * Fetch full details for a single booking by ID.
+ */
+export async function getBookingDetail(bookingId: number): Promise<WingsBookingDetail | null> {
+  try {
+    interface QueryResult {
+      bookings: { data: WingsBookingDetail[] };
+    }
+    const data = await gql<QueryResult>(BOOKING_DETAIL_QUERY, { bookingId });
+    return data.bookings.data[0] || null;
+  } catch (err) {
+    console.error("Wings: failed to fetch booking detail:", err);
+    return null;
+  }
+}
+
+/**
+ * Find the most recent booking with a lesson plan for a given student, before a given date.
+ */
+const PREVIOUS_LESSON_QUERY = `
+query GetPreviousLesson($userId: Int!, $startDate: String!, $endDate: String!) {
+  bookings(first: 50, filter: { userId: $userId, startDate: $startDate, endDate: $endDate }) {
+    data {
+      id
+      from
+      to
+      comments
+      eventTitle
+      type { name }
+      status { name }
+      user { id name }
+      customer { id name }
+      instructor { id name }
+      aircraft { callSign }
+      lessons {
+        id
+        comments
+        plan { name isAssessment }
+        status { name }
+        records {
+          id
+          score
+          comments
+          objective { summary category { name } }
+        }
+      }
+    }
+  }
+}
+`;
+
+export interface PreviousLessonResult {
+  bookingId: number;
+  date: string;
+  planName: string;
+  isAssessment: boolean;
+  status: string | null;
+  comments: string | null;
+  records: { objectiveSummary: string; categoryName: string; score: number | null; comments: string | null }[];
+}
+
+export async function getPreviousLessonBooking(
+  studentUserId: number,
+  beforeDate: string,
+): Promise<PreviousLessonResult | null> {
+  try {
+    const endDate = beforeDate;
+    const startDate = new Date(new Date(beforeDate + "T00:00:00").getTime() - 365 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+    interface PrevBooking extends WingsBooking {
+      lessons: {
+        id: number;
+        comments: string | null;
+        plan: { name: string; isAssessment: boolean } | null;
+        status: { name: string } | null;
+        records: {
+          id: number;
+          score: number | null;
+          comments: string | null;
+          objective: { summary: string; category: { name: string } | null } | null;
+        }[];
+      }[];
+    }
+    interface QueryResult {
+      bookings: { data: PrevBooking[] };
+    }
+
+    const data = await gql<QueryResult>(PREVIOUS_LESSON_QUERY, {
+      userId: studentUserId,
+      startDate,
+      endDate,
+    });
+
+    // Find most recent booking with a lesson, sorted newest first
+    const sorted = data.bookings.data
+      .filter((b) => b.lessons?.length > 0)
+      .sort((a, b) => b.from.localeCompare(a.from));
+
+    if (sorted.length === 0) return null;
+
+    const booking = sorted[0];
+    // Prefer a lesson with a plan, fall back to the first lesson
+    const lesson = booking.lessons.find((l) => l.plan?.name) || booking.lessons[0];
+    return {
+      bookingId: booking.id,
+      date: booking.from.slice(0, 10),
+      planName: lesson.plan?.name || "—",
+      isAssessment: lesson.plan?.isAssessment || false,
+      status: lesson.status?.name || null,
+      comments: lesson.comments || null,
+      records: (lesson.records || []).map((r) => ({
+        objectiveSummary: r.objective?.summary || "—",
+        categoryName: r.objective?.category?.name || "—",
+        score: r.score,
+        comments: r.comments || null,
+      })),
+    };
+  } catch (err) {
+    console.error("Wings: failed to fetch previous lesson:", err);
+    return null;
+  }
+}
+
+export interface StudentLessonSummary {
+  bookingId: number;
+  date: string;
+  planName: string | null;
+  isAssessment: boolean;
+  status: string | null;
+  instructor: string | null;
+  aircraft: string | null;
+  comments: string | null;
+  records: { objectiveSummary: string; categoryName: string; score: number | null; comments: string | null }[];
+}
+
+/**
+ * Fetch the last N lessons for a student (most recent first).
+ */
+export async function getStudentLessonHistory(
+  studentUserId: number,
+  count = 10,
+): Promise<StudentLessonSummary[]> {
+  try {
+    const endDate = new Date().toISOString().slice(0, 10);
+    const startDate = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+    interface HistBooking extends WingsBooking {
+      lessons: {
+        id: number;
+        comments: string | null;
+        plan: { name: string; isAssessment: boolean } | null;
+        status: { name: string } | null;
+        records: {
+          id: number;
+          score: number | null;
+          comments: string | null;
+          objective: { summary: string; category: { name: string } | null } | null;
+        }[];
+      }[];
+    }
+    interface QueryResult {
+      bookings: { data: HistBooking[] };
+    }
+
+    const data = await gql<QueryResult>(PREVIOUS_LESSON_QUERY, {
+      userId: studentUserId,
+      startDate,
+      endDate,
+    });
+
+    // Filter to confirmed bookings with lessons, sort newest first, take N
+    const withLessons = data.bookings.data
+      .filter((b) => b.status.name !== "Declined" && b.lessons.length > 0)
+      .sort((a, b) => b.from.localeCompare(a.from))
+      .slice(0, count);
+
+    return withLessons.map((b) => {
+      const lesson = b.lessons.find((l) => l.plan?.name) || b.lessons[0];
+      return {
+        bookingId: b.id,
+        date: b.from.slice(0, 10),
+        planName: lesson.plan?.name || null,
+        isAssessment: lesson.plan?.isAssessment || false,
+        status: lesson.status?.name || null,
+        instructor: b.instructor?.name || null,
+        aircraft: b.aircraft?.callSign || null,
+        comments: lesson.comments || null,
+        records: (lesson.records || []).map((r) => ({
+          objectiveSummary: r.objective?.summary || "—",
+          categoryName: r.objective?.category?.name || "—",
+          score: r.score,
+          comments: r.comments || null,
+        })),
+      };
+    });
+  } catch (err) {
+    console.error("Wings: failed to fetch student lesson history:", err);
+    return [];
+  }
+}
+
+const AIRCRAFT_STATUS_QUERY = `
+query GetAllAircraft {
+  aircraft(first: 20) {
+    data {
+      callSign
+      serviceable
+      documents {
+        id
+        description
+        expires
+        isExpired
+        type { name }
+        category { name }
+        file { originalFilename mimeType }
+      }
+      remarks {
+        id
+        remark
+        details
+        phase
+        createdAt
+        releasedAt
+      }
     }
   }
 }
@@ -160,9 +500,45 @@ query GetInstructorBookings($userId: Int!, $startDate: String!, $endDate: String
 
 const docCache = new Map<number, { data: WingsUserDocuments | null; cachedAt: number }>();
 const scheduleCache = new Map<number, { data: WingsSchedule | null; cachedAt: number }>();
+let aircraftCache: { data: WingsAircraftStatus[]; cachedAt: number } | null = null;
 const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
 
 // --- Public API ---
+
+/**
+ * Fetch aircraft status by callSign (cached, all aircraft fetched at once)
+ */
+export async function getAircraftStatus(callSign: string): Promise<WingsAircraftStatus | null> {
+  if (!aircraftCache || Date.now() - aircraftCache.cachedAt > CACHE_TTL_MS) {
+    try {
+      interface QueryResult {
+        aircraft: {
+          data: {
+            callSign: string;
+            serviceable: boolean;
+            documents: WingsDocument[];
+            remarks: WingsAircraftRemark[];
+          }[];
+        };
+      }
+      const data = await gql<QueryResult>(AIRCRAFT_STATUS_QUERY);
+      aircraftCache = {
+        data: data.aircraft.data.map((ac) => ({
+          callSign: ac.callSign,
+          serviceable: ac.serviceable,
+          documents: ac.documents,
+          remarks: ac.remarks,
+        })),
+        cachedAt: Date.now(),
+      };
+    } catch (err) {
+      console.error("Wings: failed to fetch aircraft:", err);
+      return null;
+    }
+  }
+
+  return aircraftCache.data.find((ac) => ac.callSign === callSign) || null;
+}
 
 /**
  * Fetch all documents for a Wings user by their user ID (cached)
@@ -235,6 +611,31 @@ export async function getInstructorBookings(wingsUserId: number): Promise<WingsS
 }
 
 /**
+ * Fetch bookings for an instructor with a wider window (past 7 + future 21 days).
+ * Used by capability-action endpoint for the direct schedule view.
+ */
+export async function getInstructorBookingsExpanded(
+  wingsUserId: number,
+  pastDays = 7,
+  futureDays = 21,
+): Promise<WingsBooking[]> {
+  const startDate = new Date(Date.now() - pastDays * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const endDate = new Date(Date.now() + futureDays * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+  interface QueryResult {
+    bookings: { data: WingsBooking[] };
+  }
+
+  const data = await gql<QueryResult>(INSTRUCTOR_BOOKINGS_QUERY, {
+    userId: wingsUserId,
+    startDate,
+    endDate,
+  });
+
+  return data.bookings.data;
+}
+
+/**
  * Build a context string for Gemini with instructor schedule info, grouped by date
  */
 export function buildScheduleContext(schedule: WingsSchedule): string {
@@ -256,7 +657,7 @@ export function buildScheduleContext(schedule: WingsSchedule): string {
     for (const b of bookings) {
       const timeFrom = b.from.slice(11, 16);
       const timeTo = b.to.slice(11, 16);
-      const student = b.eventTitle || b.customer?.name || "—";
+      const student = b.eventTitle || b.user?.name || b.customer?.name || "—";
       const aircraft = b.aircraft?.callSign || "—";
       const type = b.type.name;
       const status = b.status.name;

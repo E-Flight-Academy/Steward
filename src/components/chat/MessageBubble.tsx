@@ -2,6 +2,8 @@ import ReactMarkdown from "react-markdown";
 import type { Message } from "@/types/chat";
 import type { UiLabels } from "@/lib/i18n/labels";
 import { parseLinkCards } from "@/lib/chat-post-process";
+import ScheduleMessage from "./ScheduleMessage";
+import BookingDetailMessage from "./BookingDetailMessage";
 
 interface MessageBubbleProps {
   message: Message;
@@ -9,11 +11,12 @@ interface MessageBubbleProps {
   onRate: (msgIndex: number, rating: "\u{1F44D}" | "\u{1F44E}", e?: React.MouseEvent) => void;
   onFaqClick: () => void;
   onAvatarClick: () => void;
+  onBookingClick?: (bookingId: number, date: string, time: string, student: string) => void;
   t: (key: keyof UiLabels) => string;
   kiosk?: boolean;
 }
 
-export default function MessageBubble({ message, index, onRate, onFaqClick, onAvatarClick, t, kiosk }: MessageBubbleProps) {
+export default function MessageBubble({ message, index, onRate, onFaqClick, onAvatarClick, onBookingClick, t, kiosk }: MessageBubbleProps) {
   return (
     <div
       key={index}
@@ -28,6 +31,17 @@ export default function MessageBubble({ message, index, onRate, onFaqClick, onAv
       {message.role === "user" ? (
         <div className={`max-w-[70%] bg-[#1515F5] text-white px-4 py-3 rounded-2xl rounded-tr-sm shadow-[0_2px_8px_-2px_rgba(0,0,0,0.08)] ${kiosk ? "text-xl" : ""}`}>
           <p className="whitespace-pre-wrap leading-relaxed">{message.content}</p>
+        </div>
+      ) : message.structured ? (
+        <div className="max-w-[85%] group/msg">
+          <div className="bg-white dark:bg-gray-900 px-4 py-3 rounded-2xl rounded-tl-sm shadow-[0_2px_8px_-2px_rgba(0,0,0,0.08)] text-foreground">
+            {message.structured.type === "schedule" && (
+              <ScheduleMessage data={message.structured.data} summary={message.structured.summary} onBookingClick={onBookingClick} />
+            )}
+            {message.structured.type === "booking-detail" && (
+              <BookingDetailMessage data={message.structured.data} summary={message.structured.summary} onBookingClick={onBookingClick} />
+            )}
+          </div>
         </div>
       ) : (() => {
         const sourceMatch = message.content.match(/\n?\[source:\s*(.+?)\]\s*$/i);

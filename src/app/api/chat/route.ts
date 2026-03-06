@@ -5,7 +5,7 @@ import { getConfig } from "@/lib/config";
 import { getFaqs, buildFaqContext } from "@/lib/faq";
 import { getWebsiteContent, buildWebsiteContext } from "@/lib/website";
 import { isVectorConfigured, queryWebsite, queryFaqs, type WebsiteMatch, type FaqMatch } from "@/lib/vector";
-import { getProducts, buildProductsContext } from "@/lib/shopify";
+// Products removed from context — pricing info already in website content
 import { getTranslations } from "@/lib/i18n/translate";
 import { getSession, fetchCustomerOrders, buildOrdersContext, type ShopifyOrder } from "@/lib/shopify-auth";
 import { getUserData } from "@/lib/airtable";
@@ -13,7 +13,7 @@ import { getFoldersForRoles, getCapabilitiesForRoles } from "@/lib/role-access";
 import { getUserDocuments, buildDocumentValidityContext, getInstructorBookings, buildScheduleContext } from "@/lib/wings";
 import { chatRequestSchema } from "@/lib/api-schemas";
 import { logger, apiTimer } from "@/lib/logger";
-import { checkRateLimit } from "@/lib/kv-cache";
+import { checkRateLimit, getKvWingsSchedule } from "@/lib/kv-cache";
 
 export const maxDuration = 60;
 
@@ -76,7 +76,7 @@ export async function POST(request: NextRequest) {
     if (!parsed.success) {
       return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
     }
-    const { messages, lang: clientLang, flowContext, roleOverride, userEmail: userEmailOverride } = parsed.data;
+    const { messages, lang: clientLang, flowContext, roleOverride, userEmail: userEmailOverride, focused } = parsed.data;
 
     // Rate limiting by IP
     const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim()
@@ -159,17 +159,20 @@ export async function POST(request: NextRequest) {
       async start(controller) {
         try {
 
-    // Load config first (needed for website_pages URLs)
-    const config = await trackProgress(withTimeout(
+    // In focused mode, skip all expensive data sources (FAQs, website, products, etc.)
+    // Only load config for basic system prompt settings
+    const config = focused ? null : await trackProgress(withTimeout(
       getConfig().catch((err) => { console.error("Failed to load config:", err); return null; }),
       5000, null
     ), "config", controller, encoder);
 
     // Use RAG for website/FAQ when vector store is configured
-    const useVectorRag = isVectorConfigured();
+    const useVectorRag = !focused && isVectorConfigured();
 
     // Load remaining data sources in parallel (with progress events)
-    const [faqs, ragResult, binaryContext, websitePages, products, orders, wingsDocResult, wingsScheduleResult, faqMatches, websiteMatches] = await Promise.all([
+    const [faqs, ragResult, binaryContext, websitePages, products, orders, wingsDocResult, wingsScheduleResult, faqMatches, websiteMatches] = focused
+      ? [[], null, null, [], [], [] as ShopifyOrder[], null, null, [] as FaqMatch[], [] as WebsiteMatch[]]
+      : await Promise.all([
       // Full FAQ list (needed for source matching even with RAG)
       trackProgress(withTimeout(
         getFaqs(true).catch((err) => { console.error("Failed to load FAQs:", err); return [] as never[]; }),
@@ -191,13 +194,7 @@ export async function POST(request: NextRequest) {
         }),
         10000, []
       ), "website", controller, encoder),
-      trackProgress(withTimeout(
-        getProducts().catch((err) => {
-          console.error("Failed to load products:", err);
-          return [] as never[];
-        }),
-        5000, []
-      ), "products", controller, encoder),
+      Promise.resolve([]),  // Products removed — pricing info already in website content
       accessToken
         ? trackProgress(withTimeout(
             fetchCustomerOrders(accessToken).catch((err) => {
@@ -218,7 +215,14 @@ export async function POST(request: NextRequest) {
         : Promise.resolve(null),
       capabilities.includes("instructor-schedule") && wingsUserId
         ? trackProgress(withTimeout(
-            getInstructorBookings(wingsUserId).catch((err) => {
+            // Try Redis cache first (populated by capability-action), fall back to Wings API
+            (async () => {
+              const cached = await getKvWingsSchedule(wingsUserId!);
+              if (cached) {
+                return { userId: wingsUserId!, bookings: cached } as import("@/lib/wings").WingsSchedule;
+              }
+              return getInstructorBookings(wingsUserId!);
+            })().catch((err) => {
               console.error("Failed to fetch instructor schedule:", err);
               return null;
             }),
@@ -251,11 +255,23 @@ export async function POST(request: NextRequest) {
     // Build system instruction based on search_order
     const instructionParts: string[] = [];
 
+    if (focused) {
+      // Focused mode: lightweight system prompt, no data sources
+      instructionParts.push(
+        `You are the Steward assistant for E-Flight Academy.`,
+        `Today's date is: ${new Date().toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}.`,
+        `Your tone of voice is: ${toneOfVoice}.`,
+        "ONLY use the data provided in the user's message. Do not invent or fabricate details.",
+        `MANDATORY: Always respond in the SAME language as the user's message. The user's current language preference is: ${clientLang || "en"}.`,
+        "LANGUAGE TAG: End your response with a [lang: xx] tag with the ISO 639-1 code of the language you responded in.",
+      );
+    } else {
+
     instructionParts.push(
       `You are the Steward assistant. ${companyContext}`,
       `Today's date is: ${new Date().toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}.`,
       `Your tone of voice is: ${toneOfVoice}.`,
-      "STRICT RULE: ONLY use information that is explicitly present in the context sections below (FAQ, Knowledge Base, Website Content, Products, Orders). NEVER invent, guess, or fill in details that are not in the provided data. If the context does not contain enough information to fully answer a question, say so honestly and suggest the user contact E-Flight directly. Do not fabricate dates, events, prices, names, or any other facts.",
+      "STRICT RULE: ONLY use information that is explicitly present in the context sections below (FAQ, Knowledge Base, Website Content, Orders). NEVER invent, guess, or fill in details that are not in the provided data. If the context does not contain enough information to fully answer a question, say so honestly and suggest the user contact E-Flight directly. Do not fabricate dates, events, prices, names, or any other facts.",
       "Give thorough, helpful answers using the provided context. Include relevant details like dates, times, prices, and descriptions when available in the sources. Do NOT just refer users to a page — actually include the information from the sources in your response.",
     );
 
@@ -284,12 +300,6 @@ export async function POST(request: NextRequest) {
       stepNum++;
     }
 
-    if (products.length > 0) {
-      searchSteps.push(
-        `${stepNum}. For questions about products, merchandise, or prices, refer to the Shop Products section.`
-      );
-      stepNum++;
-    }
 
     if (orders.length > 0) {
       searchSteps.push(
@@ -314,10 +324,10 @@ export async function POST(request: NextRequest) {
 
     // Fixed formatting rules (always applied)
     instructionParts.push(
-      "IMPORTANT: When mentioning URLs, email addresses, or phone numbers, always format them as clickable markdown links. For websites use [visible text](https://example.com). For email addresses always show the full address as link text: [info@eflight.nl](mailto:info@eflight.nl). For phone numbers always show the full number as link text: [055 203 2230](tel:+31552032230). When referring someone to contact E-Flight by phone, ALSO mention WhatsApp as an option and include the link: [WhatsApp](https://wa.me/31552032230). Never hide the address or number behind generic words like 'email' or 'phone'. Never use raw HTML tags. NEVER include URLs that are not provided in the context below (FAQ, Website Content, Products sections). Do not make up or guess URLs — only use URLs that appear in the provided data.",
-      "LINK CARDS: When your answer references a relevant page, include one or more [link: url | label] tags at the END of your response (before the [source: ...] tag). These render as clickable card buttons. For the label, use the actual page title as it appears in the Website Content, FAQ, or Products sections — do not shorten or paraphrase it. ONLY use URLs that explicitly appear in the Website Content, FAQ, or Products sections below. NEVER create link cards for Knowledge Base documents — these are internal files without public URLs. Do not make up or guess URLs. IMPORTANT: Never include duplicate link cards for the same page in different languages (e.g. /pages/agenda and /en/pages/agenda are the same page). Always use the URL that matches the language of your response.",
+      "IMPORTANT: When mentioning URLs, email addresses, or phone numbers, always format them as clickable markdown links. For websites use [visible text](https://example.com). For email addresses always show the full address as link text: [info@eflight.nl](mailto:info@eflight.nl). For phone numbers always show the full number as link text: [055 203 2230](tel:+31552032230). When referring someone to contact E-Flight by phone, ALSO mention WhatsApp as an option and include the link: [WhatsApp](https://wa.me/31552032230). Never hide the address or number behind generic words like 'email' or 'phone'. Never use raw HTML tags. NEVER include URLs that are not provided in the context below (FAQ, Website Content sections). Do not make up or guess URLs — only use URLs that appear in the provided data.",
+      "LINK CARDS: When your answer references a relevant page, include one or more [link: url | label] tags at the END of your response (before the [source: ...] tag). These render as clickable card buttons. For the label, use the actual page title as it appears in the Website Content or FAQ sections — do not shorten or paraphrase it. ONLY use URLs that explicitly appear in the Website Content or FAQ sections below. NEVER create link cards for Knowledge Base documents — these are internal files without public URLs. Do not make up or guess URLs. IMPORTANT: Never include duplicate link cards for the same page in different languages (e.g. /pages/agenda and /en/pages/agenda are the same page). Always use the URL that matches the language of your response.",
       "FOLLOW-UP SUGGESTIONS: At the very end of your response (after any [link:] tags, before the [source:] tag), include exactly 2 short follow-up questions the user might want to ask next. Format: [suggestions: question 1 | question 2]. The questions must be in the same language as your response, contextually relevant, and concise (max 60 characters each). Do not include suggestions for simple greetings.",
-      "MANDATORY: You MUST end EVERY response with a source tag on a new line. Format: [source: X] where X is one of: FAQ, Website, Products, Orders, Knowledge Base, General Knowledge. When the source is Website, include the page URL like this: [source: Website | https://www.eflight.nl/page]. When the source is FAQ, include the original FAQ question (in English) like this: [source: FAQ | What does the training cost?]. When the source is Products (Shop Products & Prices section), include the product URL like this: [source: Products | https://www.eflight.nl/products/product-name]. If the answer comes from a FAQ entry, ALWAYS use FAQ as the source, even if similar information exists on the website. If the answer is about product pricing from the Shop Products section, use Products as the source. This is required for every single response without exception."
+      "MANDATORY: You MUST end EVERY response with a source tag on a new line. Format: [source: X] where X is one of: FAQ, Website, Orders, Knowledge Base, General Knowledge. When the source is Website, include the page URL like this: [source: Website | https://www.eflight.nl/page]. When the source is FAQ, include the original FAQ question (in English) like this: [source: FAQ | What does the training cost?]. If the answer comes from a FAQ entry, ALWAYS use FAQ as the source, even if similar information exists on the website. This is required for every single response without exception."
     );
 
     instructionParts.push(
@@ -338,19 +348,30 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    } // end non-focused block
+
     // Append FAQ context (RAG or full)
-    if (searchOrder.includes("faq") && faqs.length > 0) {
+    // Filter FAQs by audience: no audience = public, with audience = role must match
+    const normalizedRoles = userRoles.map((r) => r.toLowerCase());
+    const accessibleFaqs = faqs.filter((f) =>
+      f.audience.length === 0 || f.audience.some((a) => normalizedRoles.includes(a))
+    );
+    if (accessibleFaqs.length < faqs.length) {
+      console.log(`FAQ role filter: ${faqs.length} total → ${accessibleFaqs.length} accessible (roles: [${userRoles.join(", ")}])`);
+    }
+
+    if (searchOrder.includes("faq") && accessibleFaqs.length > 0) {
       const MIN_FAQ_SCORE = 0.65;
       const relevantFaqMatches = faqMatches.filter((m) => m.score >= MIN_FAQ_SCORE);
       if (useVectorRag && relevantFaqMatches.length > 0) {
         // RAG: only include relevant FAQs matched by vector search
         const matchedQuestions = new Set(relevantFaqMatches.map((m) => m.question));
-        const relevantFaqs = faqs.filter((f) => matchedQuestions.has(f.question));
+        const relevantFaqs = accessibleFaqs.filter((f) => matchedQuestions.has(f.question));
         console.log(`FAQ RAG: ${faqMatches.length} matches, ${relevantFaqs.length} above threshold (${MIN_FAQ_SCORE})`);
         instructionParts.push("", buildFaqContext(relevantFaqs, clientLang || "en"));
       } else {
-        // Fallback: send all FAQs
-        instructionParts.push("", buildFaqContext(faqs, clientLang || "en"));
+        // Fallback: send all accessible FAQs
+        instructionParts.push("", buildFaqContext(accessibleFaqs, clientLang || "en"));
       }
     }
 
@@ -390,10 +411,6 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Append Products context
-    if (products.length > 0) {
-      instructionParts.push("", buildProductsContext(products));
-    }
 
     // Append Orders context (only for authenticated users)
     if (orders.length > 0) {
@@ -573,59 +590,16 @@ export async function POST(request: NextRequest) {
             processedSource = `[source: Website | ${sourceUrl} | ${sourceTitle}]`;
           }
 
-          // Post-process: ensure [source: Products] tags include proper URL and title
-          const productsSourceMatch = fullText.match(/\[source:\s*Products?\s*(?:\|\s*(https?:\/\/[^\s\]|]+))?\s*(?:\|[^\]]*)?\]/i);
-          if (!processedSource && productsSourceMatch && products.length > 0) {
-            const geminiProductUrl = productsSourceMatch[1]?.trim();
-            let matchedProduct = geminiProductUrl
-              ? products.find(p => p.url === geminiProductUrl || p.url.includes(geminiProductUrl) || geminiProductUrl.includes(p.url))
-              : undefined;
-            if (!matchedProduct) {
-              // Match by price mentioned in response
-              const responseText = fullText.replace(/\[source:[^\]]*\]/gi, "").toLowerCase();
-              const priceMatches = responseText.match(/€\s?[\d,.]+/g);
-              if (priceMatches) {
-                for (const p of products) {
-                  for (const pm of priceMatches) {
-                    const priceNum = parseFloat(pm.replace("€", "").replace(/\s/g, "").replace(",", "."));
-                    if (priceNum === p.minPrice || priceNum === p.maxPrice ||
-                        p.variants.some(v => v.price === priceNum)) {
-                      matchedProduct = p;
-                      break;
-                    }
-                  }
-                  if (matchedProduct) break;
-                }
-              }
-            }
-            if (!matchedProduct) {
-              // Word-match against product titles and tags
-              const responseText = fullText.replace(/\[source:[^\]]*\]/gi, "").toLowerCase();
-              let bestScore = 0;
-              for (const p of products) {
-                const matchWords = [...p.title.toLowerCase().split(/\s+/), ...p.tags.map(t => t.toLowerCase())].filter(w => w.length > 3);
-                let score = 0;
-                for (const w of matchWords) { if (responseText.includes(w)) score++; }
-                if (score > bestScore) { bestScore = score; matchedProduct = p; }
-              }
-            }
-            if (matchedProduct) {
-              sourceUrl = matchedProduct.url;
-              sourceTitle = matchedProduct.title;
-              processedSource = `[source: Products | ${sourceUrl} | ${sourceTitle}]`;
-            }
-          }
-
           // Post-process: ensure [source: FAQ] tags include the FAQ URL when available
           const faqSourceMatch = fullText.match(/\[source:\s*FAQ\s*(?:\|\s*([^\]]*))?\]/i);
-          if (!processedSource && faqSourceMatch && faqs.length > 0) {
+          if (!processedSource && faqSourceMatch && accessibleFaqs.length > 0) {
             const faqLabel = faqSourceMatch[1]?.trim() || "";
             // Try to find the matching FAQ by question
-            let matchedFaq = faqs.find((f) => f.question === faqLabel || f.questionNl === faqLabel || f.questionDe === faqLabel);
+            let matchedFaq = accessibleFaqs.find((f) => f.question === faqLabel || f.questionNl === faqLabel || f.questionDe === faqLabel);
             if (!matchedFaq && faqLabel) {
               // Fuzzy match: find FAQ whose question is most similar
               const labelLower = faqLabel.toLowerCase();
-              matchedFaq = faqs.find((f) =>
+              matchedFaq = accessibleFaqs.find((f) =>
                 f.question.toLowerCase().includes(labelLower) || labelLower.includes(f.question.toLowerCase()) ||
                 f.questionNl.toLowerCase().includes(labelLower) || labelLower.includes(f.questionNl.toLowerCase())
               );
@@ -635,7 +609,7 @@ export async function POST(request: NextRequest) {
               const responseWords = fullText.replace(/\[source:[^\]]*\]/gi, "").toLowerCase().split(/\s+/).filter(w => w.length > 4);
               let bestFaq = null;
               let bestScore = 0;
-              for (const f of faqs) {
+              for (const f of accessibleFaqs) {
                 if (!f.url) continue;
                 const faqWords = new Set([...f.answer.toLowerCase().split(/\s+/), ...f.question.toLowerCase().split(/\s+/)].filter(w => w.length > 4));
                 let score = 0;

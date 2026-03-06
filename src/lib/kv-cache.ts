@@ -104,6 +104,7 @@ export interface FlowOption {
   labelDe: string;
   icon: string | null;
   capability: string | null;
+  endAction?: string;
 }
 
 export interface KvFlowStep {
@@ -112,7 +113,7 @@ export interface KvFlowStep {
   messageNl: string;
   messageDe: string;
   nextDialogFlow: FlowOption[];
-  endAction: "Continue Flow" | "Start AI Chat";
+  endAction: "Continue Flow" | "Start AI Chat" | "Capability Action" | "Login";
   contextKey: string;
   endPrompt: string;
   endPromptNl: string;
@@ -125,6 +126,7 @@ export interface KvFlowStep {
   relatedFaqAnswerDe: string;
   relatedFaqUrl: string;
   order: number;
+  trigger: string | null;
 }
 
 export interface KvFlowsData {
@@ -157,6 +159,7 @@ export interface KvProductsData {
 }
 
 export interface KvRoleMapping {
+  notionPageId: string;
   role: string;
   folders: string[];
   capabilities: string[];
@@ -431,6 +434,42 @@ export async function setKvSharedChat(id: string, data: KvSharedChat): Promise<b
   } catch (err) {
     console.error("setKvSharedChat error:", err);
     return false;
+  }
+}
+
+// --- Wings Schedule ---
+const WINGS_SCHEDULE_PREFIX = "wings:schedule:";
+const WINGS_SCHEDULE_TTL = 1800; // 30 minutes
+
+export async function getKvWingsSchedule(wingsUserId: number): Promise<import("@/lib/wings").WingsBooking[] | null> {
+  return kvGet<import("@/lib/wings").WingsBooking[]>(`${WINGS_SCHEDULE_PREFIX}${wingsUserId}`);
+}
+
+export async function setKvWingsSchedule(wingsUserId: number, data: import("@/lib/wings").WingsBooking[]): Promise<void> {
+  try {
+    const r = getRedis();
+    if (!r) return;
+    await r.set(`${WINGS_SCHEDULE_PREFIX}${wingsUserId}`, data, { ex: WINGS_SCHEDULE_TTL });
+  } catch {
+    // Non-fatal
+  }
+}
+
+// --- Student lesson history cache ---
+const WINGS_STUDENT_LESSONS_PREFIX = "wings:student-lessons:";
+const WINGS_STUDENT_LESSONS_TTL = 1800; // 30 minutes
+
+export async function getKvStudentLessons(studentUserId: number): Promise<import("@/lib/wings").StudentLessonSummary[] | null> {
+  return kvGet<import("@/lib/wings").StudentLessonSummary[]>(`${WINGS_STUDENT_LESSONS_PREFIX}${studentUserId}`);
+}
+
+export async function setKvStudentLessons(studentUserId: number, data: import("@/lib/wings").StudentLessonSummary[]): Promise<void> {
+  try {
+    const r = getRedis();
+    if (!r) return;
+    await r.set(`${WINGS_STUDENT_LESSONS_PREFIX}${studentUserId}`, data, { ex: WINGS_STUDENT_LESSONS_TTL });
+  } catch {
+    // Non-fatal
   }
 }
 

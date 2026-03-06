@@ -5,6 +5,7 @@ import {
   type KvFaq,
   type KvFaqsData,
 } from "./kv-cache";
+import { getRoleAccess } from "./role-access";
 
 // L1: in-memory cache
 let cachedFaqs: KvFaqsData | null = null;
@@ -63,18 +64,33 @@ export async function fetchFaqsFromNotion(): Promise<KvFaq[]> {
 
   const notion = new Client({ auth: apiKey });
 
-  const response = await notion.databases.query({
-    database_id: databaseId,
-    filter: {
-      property: "Live",
-      checkbox: { equals: true },
-    },
-    sorts: [{ property: "Order", direction: "ascending" }],
-  });
+  // Paginate through all results (Notion returns max 100 per query)
+  const allPages: Awaited<ReturnType<typeof notion.databases.query>>["results"] = [];
+  let cursor: string | undefined;
+  do {
+    const response = await notion.databases.query({
+      database_id: databaseId,
+      filter: {
+        property: "Live",
+        checkbox: { equals: true },
+      },
+      sorts: [{ property: "Order", direction: "ascending" }],
+      start_cursor: cursor,
+    });
+    allPages.push(...response.results);
+    cursor = response.has_more ? (response.next_cursor ?? undefined) : undefined;
+  } while (cursor);
+
+  // Build a lookup map from Role Access page IDs to role names
+  const roleAccess = await getRoleAccess();
+  const rolePageIdToName = new Map<string, string>();
+  for (const mapping of roleAccess) {
+    rolePageIdToName.set(mapping.notionPageId, mapping.role.toLowerCase());
+  }
 
   const faqs: KvFaq[] = [];
 
-  for (const page of response.results) {
+  for (const page of allPages) {
     if (!("properties" in page)) continue;
 
     const props = page.properties as Record<string, unknown>;
@@ -101,10 +117,12 @@ export async function fetchFaqsFromNotion(): Promise<KvFaq[]> {
       ? catProp.multi_select.map((s) => s.name)
       : [];
 
-    // Audience (multi_select)
-    const audProp = props["Audience"] as { type: string; multi_select?: { name: string }[] } | undefined;
-    const audience = audProp?.type === "multi_select" && audProp.multi_select
-      ? audProp.multi_select.map((s) => s.name)
+    // Role (relation to Role Access database) — resolve page IDs to role names
+    const roleProp = props["Role"] as { type: string; relation?: { id: string }[] } | undefined;
+    const audience = roleProp?.type === "relation" && roleProp.relation
+      ? roleProp.relation
+          .map((r) => rolePageIdToName.get(r.id))
+          .filter((name): name is string => !!name)
       : [];
 
     // Link (url property)
@@ -115,6 +133,11 @@ export async function fetchFaqsFromNotion(): Promise<KvFaq[]> {
     if (question && (answer || answerNl || answerDe)) {
       faqs.push({ notionPageId: page.id, question, questionNl, questionDe, answer, answerNl, answerDe, category, audience, url });
     }
+  }
+
+  if (rolePageIdToName.size > 0) {
+    const withRoles = faqs.filter((f) => f.audience.length > 0).length;
+    console.log(`FAQs: ${faqs.length} total, ${withRoles} with role filter, ${faqs.length - withRoles} public`);
   }
 
   return faqs;
