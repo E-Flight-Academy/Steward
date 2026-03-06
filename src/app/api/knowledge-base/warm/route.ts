@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDocumentContext, clearDocumentCache } from "@/lib/documents";
-import { getKvStatus, setKvStatus } from "@/lib/kv-cache";
+import { getKvStatus, setKvStatus, checkRateLimit } from "@/lib/kv-cache";
 import { getWebsiteContent } from "@/lib/website";
 import { getFaqs } from "@/lib/faq";
 import { getProducts } from "@/lib/shopify";
@@ -109,14 +109,26 @@ async function warmUp(force: boolean = false) {
   }
 }
 
-// POST: called by frontend on login
+// POST: called by frontend on page load — rate limited to prevent abuse
 export async function POST(request: NextRequest) {
+  const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim()
+    || request.headers.get("x-real-ip") || "unknown";
+  const { allowed } = await checkRateLimit(`warm:${ip}`);
+  if (!allowed) {
+    return NextResponse.json({ status: "rate_limited" }, { status: 429 });
+  }
   const force = request.nextUrl.searchParams.get("force") === "true";
   return warmUp(force);
 }
 
-// GET: called by cron job
+// GET: called by cron job — requires secret
 export async function GET(request: NextRequest) {
+  const secret = process.env.SYNC_SECRET || process.env.CRON_SECRET;
+  const provided = request.headers.get("authorization")?.replace("Bearer ", "")
+    || request.nextUrl.searchParams.get("secret");
+  if (!secret || provided !== secret) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
   const force = request.nextUrl.searchParams.get("force") === "true";
   return warmUp(force);
 }

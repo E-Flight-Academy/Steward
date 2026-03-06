@@ -18,7 +18,7 @@ jobs:
     steps:
       - name: Warm knowledge base
         run: |
-          curl -s -f -m 120 "$BASE_URL/api/knowledge-base/warm" || echo "Warm-up failed"
+          curl -s -f -m 120 -H "Authorization: Bearer ${{ secrets.SCW_SYNC_SECRET }}" "$BASE_URL/api/knowledge-base/warm" || echo "Warm-up failed"
 
   sync:
     if: github.event.schedule == '0 6 * * *' || github.event_name == 'workflow_dispatch'

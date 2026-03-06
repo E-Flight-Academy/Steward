@@ -53,7 +53,7 @@ jobs:
               | python3 -c "import sys,json; print(json.load(sys.stdin)['status'])")
             if [ "$STATUS" = "ready" ]; then
               echo "Container ready, warming up..."
-              curl -s "https://steward18cc86cd-steward.functions.fnc.nl-ams.scw.cloud/api/knowledge-base/warm" || true
+              curl -s -H "Authorization: Bearer ${{ secrets.SCW_SYNC_SECRET }}" "https://steward18cc86cd-steward.functions.fnc.nl-ams.scw.cloud/api/knowledge-base/warm" || true
               echo "Warm-up triggered"
               exit 0
             fi
