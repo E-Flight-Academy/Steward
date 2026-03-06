@@ -7,7 +7,7 @@ import { syncProducts } from "@/lib/shopify";
 import { syncRoleAccess } from "@/lib/role-access";
 import { getConfig } from "@/lib/config";
 import { getKvStatus, setKvStatus } from "@/lib/kv-cache";
-import { syncVectorIndex, syncWebsiteVectorIndex, syncFaqVectorIndex } from "@/lib/vector";
+import { syncVectorIndex, syncWebsiteVectorIndex, syncFaqVectorIndex, isVectorConfigured } from "@/lib/vector";
 
 function isAuthorized(request: NextRequest): boolean {
   const secret = process.env.SYNC_SECRET;
@@ -94,6 +94,7 @@ async function handleSync(request: NextRequest) {
       flows: { count: flowSteps.length, names: flowSteps.map((s) => s.name) },
       products: { count: products.length, titles: products.map((p) => p.title) },
       roleAccess: { count: roleAccess.length, roles: roleAccess.map((r) => r.role) },
+      vectorConfigured: isVectorConfigured(),
       vectorIndex: { fileCount: vectorResult.fileCount, chunkCount: vectorResult.chunkCount },
       websiteVector: { pageCount: websiteVectorResult.pageCount, chunkCount: websiteVectorResult.chunkCount },
       faqVector: { faqCount: faqVectorResult.faqCount, chunkCount: faqVectorResult.chunkCount },

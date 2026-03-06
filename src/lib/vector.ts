@@ -48,7 +48,10 @@ function getVectorIndex(): Index<ChunkMetadata> | null {
   try {
     vectorIndex = Index.fromEnv() as Index<ChunkMetadata>;
     return vectorIndex;
-  } catch {
+  } catch (err) {
+    console.error("Vector index initialization failed:", err instanceof Error ? err.message : err);
+    console.error("UPSTASH_VECTOR_REST_URL set:", !!process.env.UPSTASH_VECTOR_REST_URL);
+    console.error("UPSTASH_VECTOR_REST_TOKEN set:", !!process.env.UPSTASH_VECTOR_REST_TOKEN);
     return null;
   }
 }
@@ -267,6 +270,7 @@ export interface WebsiteMatch {
  * Each page is chunked by paragraphs, similar to Drive documents.
  */
 export async function syncWebsiteVectorIndex(pages: KvWebsitePage[]): Promise<{ pageCount: number; chunkCount: number }> {
+  console.log(`Website vector sync: starting with ${pages.length} pages, vectorConfigured=${isVectorConfigured()}`);
   const index = getVectorIndex();
   if (!index) {
     console.warn("Vector index not configured, skipping website vector sync");
@@ -426,6 +430,7 @@ export interface FaqMatch {
  * Each FAQ Q+A pair is a single chunk (they're short enough).
  */
 export async function syncFaqVectorIndex(faqs: KvFaq[]): Promise<{ faqCount: number; chunkCount: number }> {
+  console.log(`FAQ vector sync: starting with ${faqs.length} FAQs, vectorConfigured=${isVectorConfigured()}`);
   const index = getVectorIndex();
   if (!index) {
     console.warn("Vector index not configured, skipping FAQ vector sync");
