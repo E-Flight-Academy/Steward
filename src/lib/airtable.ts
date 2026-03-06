@@ -88,42 +88,39 @@ export interface AirtableCustomerSummary {
  * Fetch all customers from Airtable (for admin user picker)
  */
 export async function getAllCustomers(): Promise<AirtableCustomerSummary[]> {
-  if (!AIRTABLE_TOKEN || !AIRTABLE_BASE_ID) return [];
+  if (!AIRTABLE_TOKEN || !AIRTABLE_BASE_ID) {
+    throw new Error(`Airtable not configured: token=${!!AIRTABLE_TOKEN}, base=${!!AIRTABLE_BASE_ID}`);
+  }
 
   const customers: AirtableCustomerSummary[] = [];
   let offset: string | undefined;
 
-  try {
-    do {
-      const fields = ["Client E-Mail", "Name", "Wings Role"].map(f => `fields%5B%5D=${encodeURIComponent(f)}`).join("&");
-      const url = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${encodeURIComponent(AIRTABLE_TABLE_NAME)}?${fields}${offset ? `&offset=${offset}` : ""}`;
+  do {
+    const fields = ["Client E-Mail", "Name", "Wings Role"].map(f => `fields%5B%5D=${encodeURIComponent(f)}`).join("&");
+    const url = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${encodeURIComponent(AIRTABLE_TABLE_NAME)}?${fields}${offset ? `&offset=${offset}` : ""}`;
 
-      console.log(`[Airtable] getAllCustomers page, offset=${offset || "start"}, baseId=${AIRTABLE_BASE_ID}, tokenSet=${!!AIRTABLE_TOKEN}`);
-      const response = await fetch(url, {
-        headers: { Authorization: `Bearer ${AIRTABLE_TOKEN}` },
-        cache: "no-store",
+    const response = await fetch(url, {
+      headers: { Authorization: `Bearer ${AIRTABLE_TOKEN}` },
+      cache: "no-store",
+    });
+
+    if (!response.ok) {
+      const body = await response.text();
+      throw new Error(`Airtable ${response.status}: ${body}`);
+    }
+    const data = await response.json();
+
+    for (const rec of data.records) {
+      const email = rec.fields["Client E-Mail"];
+      if (!email) continue;
+      customers.push({
+        email,
+        name: rec.fields.Name?.[0] || email.split("@")[0],
+        roles: rec.fields["Wings Role"] || [],
       });
-
-      if (!response.ok) {
-        console.error(`[Airtable] getAllCustomers failed: ${response.status} ${await response.text()}`);
-        break;
-      }
-      const data = await response.json();
-
-      for (const rec of data.records) {
-        const email = rec.fields["Client E-Mail"];
-        if (!email) continue;
-        customers.push({
-          email,
-          name: rec.fields.Name?.[0] || email.split("@")[0],
-          roles: rec.fields["Wings Role"] || [],
-        });
-      }
-      offset = data.offset;
-    } while (offset);
-  } catch (err) {
-    console.error("Failed to fetch all customers:", err);
-  }
+    }
+    offset = data.offset;
+  } while (offset);
 
   return customers.sort((a, b) => a.name.localeCompare(b.name));
 }
