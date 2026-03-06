@@ -46,7 +46,8 @@ export default function Chat() {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const sharedChatIdRef = useRef(searchParams.get("chat"));
-  const debugMode = searchParams.get("debug") === "true" || (typeof window !== "undefined" && window.location.hostname === "localhost");
+  const [autoDebug, setAutoDebug] = useState(false);
+  const debugMode = autoDebug || searchParams.get("debug") === "true" || (typeof window !== "undefined" && window.location.hostname === "localhost");
   const client = searchParams.get("client");
   const roleOverride = useMemo(() => {
     const param = searchParams.get("role");
@@ -240,6 +241,13 @@ export default function Chat() {
 
   const adminEmails = ["matthijs@eflight.nl", "matthijscollard@gmail.com", "wesley@eflight.nl", "paulien@eflight.nl"];
   const isAdmin = !!shopifyUser?.email && adminEmails.includes(shopifyUser.email.toLowerCase());
+
+  const autoDebugEmails = ["matthijs@eflight.nl", "matthijscollard@gmail.com"];
+  useEffect(() => {
+    if (shopifyUser?.email && autoDebugEmails.includes(shopifyUser.email.toLowerCase())) {
+      setAutoDebug(true);
+    }
+  }, [shopifyUser?.email]);
 
   const {
     phase: adminPhase,
