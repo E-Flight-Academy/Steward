@@ -62,7 +62,10 @@ async function handleSync(request: NextRequest) {
     let faqVectorResult = { faqCount: 0, chunkCount: 0 };
     try {
       [vectorResult, websiteVectorResult, faqVectorResult] = await Promise.all([
-        syncVectorIndex(),
+        syncVectorIndex().catch((err) => {
+          console.error("Drive vector sync failed:", err instanceof Error ? err.stack : err);
+          return { fileCount: 0, chunkCount: 0 };
+        }),
         syncWebsiteVectorIndex(websitePages).catch((err) => {
           console.error("Website vector sync failed:", err instanceof Error ? err.stack : err);
           return { pageCount: 0, chunkCount: 0 };
