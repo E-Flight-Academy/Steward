@@ -1,9 +1,32 @@
+import Link from "next/link";
+
+function DocsNav({ active }: { active: "architecture" | "patterns" }) {
+  const items = [
+    { href: "/architecture", label: "Architecture", id: "architecture" as const },
+    { href: "/patterns", label: "Patterns", id: "patterns" as const },
+  ];
+  return (
+    <div className="flex gap-1 bg-[#F2F2F2] rounded-lg p-0.5 w-fit">
+      {items.map((item) => (
+        <Link
+          key={item.id}
+          href={item.href}
+          className={`text-sm font-medium px-4 py-1.5 rounded-md transition-colors no-underline ${active === item.id ? "bg-white text-foreground shadow-sm" : "text-[#828282] hover:text-foreground"}`}
+        >
+          {item.label}
+        </Link>
+      ))}
+    </div>
+  );
+}
+
 export default function PatternsPage() {
   return (
     <div className="min-h-screen bg-background p-8 fixed inset-0 overflow-y-auto">
       <div className="max-w-4xl mx-auto space-y-12">
         <div>
-          <h1 className="text-3xl font-bold text-e-indigo-dark mb-2">Steward Pattern Library</h1>
+          <DocsNav active="patterns" />
+          <h1 className="text-3xl font-bold text-e-indigo-dark mb-2 mt-6">Steward Pattern Library</h1>
           <p className="text-e-grey">All button types, states, and interactive elements used in Steward.</p>
         </div>
 

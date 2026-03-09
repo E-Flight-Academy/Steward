@@ -46,3 +46,9 @@ The chat flow:
 2. POST request to `/api/chat` with message history
 3. API route forwards to Gemini API with conversation context
 4. Response streamed back to Chat component
+
+## Post-Feature Checklist
+
+After completing a new feature or significant change, ask the user:
+> "Moet de Steward documentatie in Notion worden bijgewerkt?"
+> (Link: https://www.notion.so/eflight/Steward-Documentation-31b274a52e66809eb1f1e47a614363bc)

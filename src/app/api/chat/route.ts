@@ -471,8 +471,10 @@ export async function POST(request: NextRequest) {
 
     console.log(`[Context] Total: ${totalChars.toLocaleString()} chars (~${Math.round(totalChars / 4).toLocaleString()} tokens, excl. binary)`);
 
+    const modelId = focused ? "gemini-2.0-flash" : "gemini-2.5-flash";
+    console.log(`[Model] ${modelId}${focused ? " (focused)" : ""}`);
     const model = genAI.getGenerativeModel({
-      model: "gemini-2.5-flash",
+      model: modelId,
       systemInstruction,
       generationConfig: { temperature: 0.2 },
     });
