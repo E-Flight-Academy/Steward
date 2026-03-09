@@ -162,7 +162,7 @@ function SystemOverview() {
 
         {/* Core services row */}
         <div className="flex flex-wrap justify-center gap-3 max-w-2xl">
-          <Box label="Gemini AI" sub="2.5 Flash / 2.0 Flash" cat="ai" icon="✨" small id="gemini" highlight={hover} onHover={setHover} />
+          <Box label="Gemini AI" sub="2.5 Flash + 2.0 Flash Lite" cat="ai" icon="✨" small id="gemini" highlight={hover} onHover={setHover} />
           <Box label="Upstash Redis" sub="L2 Cache" cat="storage" icon="🗄️" small id="redis" highlight={hover} onHover={setHover} />
           <Box label="Upstash Vector" sub="RAG Embeddings" cat="storage" icon="🔍" small id="vector" highlight={hover} onHover={setHover} />
         </div>
@@ -177,6 +177,7 @@ function SystemOverview() {
           <Box label="Google Drive" sub="Documents · SOPs" cat="data" icon="📁" small id="drive" highlight={hover} onHover={setHover} />
           <Box label="Airtable" sub="User Roles" cat="auth" icon="📋" small id="airtable" highlight={hover} onHover={setHover} />
           <Box label="eflight.nl" sub="Website Pages" cat="data" icon="🌐" small id="website" highlight={hover} onHover={setHover} />
+          <Box label="Scaleway S3" sub="FAQ Images" cat="storage" icon="🖼️" small id="scaleway" highlight={hover} onHover={setHover} />
         </div>
       </div>
     </div>
@@ -207,16 +208,12 @@ function ChatRequestFlow() {
         <Step n={3} label="Model selection" />
         <div className="flex flex-wrap gap-2 mt-2">
           <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-[#ECD3F4] border-2 border-[#DFB6EE] text-sm">
-            <span className="font-mono text-xs px-2 py-0.5 rounded bg-white/50">focused</span>
-            <Arrow direction="right" />
-            <span className="font-semibold text-[#8B2FA8]">gemini-2.0-flash</span>
-            <span className="text-xs opacity-60">fast · cheap</span>
-          </div>
-          <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-[#ECD3F4] border-2 border-[#DFB6EE] text-sm">
-            <span className="font-mono text-xs px-2 py-0.5 rounded bg-white/50">normal</span>
-            <Arrow direction="right" />
             <span className="font-semibold text-[#8B2FA8]">gemini-2.5-flash</span>
-            <span className="text-xs opacity-60">smart · complex</span>
+            <span className="text-xs opacity-60">all requests · smart · fast</span>
+          </div>
+          <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-[#ECD3F4]/50 border-2 border-[#DFB6EE]/50 text-sm">
+            <span className="font-semibold text-[#8B2FA8]/70">gemini-2.0-flash-lite</span>
+            <span className="text-xs opacity-60">translations only</span>
           </div>
         </div>
         <Arrow />
@@ -306,9 +303,11 @@ function CapabilityActions() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {[
                 { action: "instructor-schedule", icon: "📅", desc: "Bookings (7d past, 21d future)", component: "ScheduleMessage" },
-                { action: "booking-detail", icon: "📋", desc: "Lessons, flights, scores, docs", component: "BookingDetailMessage" },
+                { action: "booking-detail", icon: "📋", desc: "Lessons, flights, scores, docs + inferred course context", component: "BookingDetailMessage" },
                 { action: "student-lessons", icon: "🎓", desc: "Full lesson history + scores", component: "StudentLessonsMessage" },
                 { action: "doc-validity", icon: "📄", desc: "Document expiry & status", component: "DocumentValidityMessage" },
+                { action: "lesson-briefing-*", icon: "📖", desc: "AI briefing via multi-step sub-flow (lesson → language → generate)", component: "BriefingMessage" },
+                { action: "course-plans", icon: "🗂️", desc: "Lightweight course plan lookup (lazy, for sub-flow enrichment)", component: "—" },
               ].map((a) => (
                 <div key={a.action} className="flex items-start gap-2.5 px-3 py-2 rounded-lg bg-[#F7F7F7] border border-[#ECECEC]">
                   <span className="text-base mt-0.5">{a.icon}</span>
@@ -320,6 +319,25 @@ function CapabilityActions() {
                 </div>
               ))}
             </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Multi-step sub-flows */}
+      <div className="pt-3 border-t border-[#ECECEC] space-y-2">
+        <p className="text-xs font-semibold text-e-grey uppercase tracking-wide">Multi-step sub-flows</p>
+        <div className="flex flex-col items-start gap-2 text-xs">
+          <div className="flex items-center gap-2 flex-wrap">
+            <Box label="Card action pill" cat="user" icon="👆" small />
+            <Arrow direction="right" />
+            <Box label="enrichBookingContext" sub="Lazy fetch course plans" cat="app" icon="🔄" small />
+            <Arrow direction="right" />
+            <Box label="Step 1: Options" sub="e.g. lesson choice" cat="internal" icon="1️⃣" small />
+            <Arrow direction="right" />
+            <Box label="Step N: Final" sub="Dispatch action" cat="app" icon="⚡" small />
+          </div>
+          <div className="px-3 py-2 rounded-lg bg-[#F7F7F7] border border-[#ECECEC] text-e-grey">
+            Bookings without a lesson plan: student history is queried to infer the current course and next lesson from the sequence.
           </div>
         </div>
       </div>
@@ -349,7 +367,9 @@ function CachingArchitecture() {
     { source: "Website, Products", ttl: "6 hours" },
     { source: "Gemini file URIs", ttl: "47 hours" },
     { source: "Wings schedule/lessons", ttl: "30 min" },
+    { source: "Course plans", ttl: "24 hours" },
     { source: "Translations, Shared chats", ttl: "30 days" },
+    { source: "FAQ images (Scaleway S3)", ttl: "Permanent" },
   ];
 
   return (
@@ -472,6 +492,17 @@ function RagPipeline() {
             <Arrow />
             <Box label="Upstash Vector" sub="Cosine similarity · 3 namespaces" cat="storage" icon="📐" small />
 
+            <div className="mt-4 pt-3 border-t border-[#ECECEC]">
+              <div className="text-[11px] font-semibold text-foreground mb-2">FAQ Image Pipeline</div>
+              <div className="flex flex-col items-start gap-2">
+                <Box label="Notion page blocks" sub="Extract image blocks per FAQ" cat="data" icon="🖼️" small />
+                <Arrow />
+                <Box label="Mirror to Scaleway S3" sub="Notion URLs expire ~1hr → permanent S3 URLs" cat="storage" icon="☁️" small />
+                <Arrow />
+                <Box label="Store URL in FAQ data" sub="Rendered as markdown images in chat" cat="internal" icon="📎" small />
+              </div>
+            </div>
+
             <div className="mt-3 px-3 py-2 rounded-lg bg-[#F7F7F7] border border-[#ECECEC] text-xs text-e-grey">
               Triggered daily via <span className="font-mono">POST /api/sync-notion</span> (06:00 UTC) or manually
             </div>
@@ -542,7 +573,10 @@ function AuthRoles() {
           <div className="flex items-center gap-2 flex-wrap">
             <Box label="Session email" cat="app" icon="📧" small />
             <Arrow direction="right" />
-            <Box label="Airtable" sub="Customer lookup" cat="auth" icon="📋" small />
+            <div className="flex flex-col gap-1">
+              <Box label="Airtable Customers" sub="Wings Role (multi-select)" cat="auth" icon="📋" small />
+              <Box label="Airtable Instructors" sub="All Roles (text) + Wings ID" cat="auth" icon="✈️" small />
+            </div>
             <Arrow direction="right" />
             <div className="flex flex-wrap gap-1.5">
               {["student", "instructor", "renter", "operations"].map((r) => (

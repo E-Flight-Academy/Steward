@@ -3,9 +3,13 @@ import {
   getKvFaqs,
   setKvFaqs,
   type KvFaq,
+  type KvFaqImage,
   type KvFaqsData,
 } from "./kv-cache";
 import { getRoleAccess } from "./role-access";
+import { mirrorImage } from "./scaleway-storage";
+import { logger } from "./logger";
+import { pushFaqMetafields } from "./shopify-admin";
 
 // L1: in-memory cache
 let cachedFaqs: KvFaqsData | null = null;
@@ -54,7 +58,43 @@ export function getRichTextMd(props: Record<string, unknown>, key: string): stri
   return md;
 }
 
-export async function fetchFaqsFromNotion(): Promise<KvFaq[]> {
+/** Extract images from Notion page blocks and mirror to Scaleway */
+async function extractPageImages(
+  notion: InstanceType<typeof Client>,
+  pageId: string,
+): Promise<KvFaqImage[]> {
+  try {
+    const blocks = await notion.blocks.children.list({ block_id: pageId, page_size: 100 });
+    const images: KvFaqImage[] = [];
+
+    for (const block of blocks.results) {
+      if (!("type" in block) || block.type !== "image") continue;
+      const imgBlock = block as { id: string; type: "image"; image: { type: string; file?: { url: string }; external?: { url: string }; caption?: { plain_text: string }[] } };
+      const sourceUrl = imgBlock.image.type === "file"
+        ? imgBlock.image.file?.url
+        : imgBlock.image.external?.url;
+      if (!sourceUrl) continue;
+
+      const caption = imgBlock.image.caption?.map((c) => c.plain_text).join("") || undefined;
+      // For Notion-hosted files (temporary URLs), mirror to Scaleway
+      // For external URLs, keep as-is (they're already permanent)
+      if (imgBlock.image.type === "file") {
+        const ext = sourceUrl.match(/\.(png|jpe?g|gif|webp|svg)/i)?.[1] || "png";
+        const key = `faq-images/${pageId}/${block.id}.${ext}`;
+        const permanentUrl = await mirrorImage(sourceUrl, key);
+        if (permanentUrl) images.push({ url: permanentUrl, caption });
+      } else {
+        images.push({ url: sourceUrl, caption });
+      }
+    }
+    return images;
+  } catch (err) {
+    logger.warn("Failed to extract images for page", { pageId, error: String(err) });
+    return [];
+  }
+}
+
+export async function fetchFaqsFromNotion(skipImages = false): Promise<KvFaq[]> {
   const apiKey = process.env.NOTION_API_KEY;
   const databaseId = process.env.NOTION_DATABASE_ID;
 
@@ -129,9 +169,23 @@ export async function fetchFaqsFromNotion(): Promise<KvFaq[]> {
     const urlProp = props["Link"] as { type: string; url?: string | null } | undefined;
     const url = urlProp?.type === "url" && urlProp.url ? urlProp.url : "";
 
+    // Website checkbox
+    const webProp = props["Website"] as { type: string; checkbox?: boolean } | undefined;
+    const website = webProp?.type === "checkbox" && webProp.checkbox === true;
+
+    // Section Slug (rollup from Website Section relation)
+    const slugProp = props["Section Slug"] as { type: string; rollup?: { array?: { rich_text?: { plain_text: string }[] }[] } } | undefined;
+    const sectionSlug = slugProp?.type === "rollup" && slugProp.rollup?.array?.[0]?.rich_text
+      ? slugProp.rollup.array[0].rich_text.map((t) => t.plain_text).join("")
+      : "";
+
     // Include if at least one Q+A pair exists
     if (question && (answer || answerNl || answerDe)) {
-      faqs.push({ notionPageId: page.id, question, questionNl, questionDe, answer, answerNl, answerDe, category, audience, url });
+      faqs.push({
+        notionPageId: page.id, question, questionNl, questionDe,
+        answer, answerNl, answerDe, category, audience, url,
+        website, sectionSlug,
+      });
     }
   }
 
@@ -140,15 +194,114 @@ export async function fetchFaqsFromNotion(): Promise<KvFaq[]> {
     console.log(`FAQs: ${faqs.length} total, ${withRoles} with role filter, ${faqs.length - withRoles} public`);
   }
 
+  // Fetch images in batches of 3 (Notion rate limit: 3 req/sec)
+  // This runs after all FAQ properties are collected so sync is fast
+  const hasS3 = !!process.env.SCW_ACCESS_KEY;
+  if (hasS3 && !skipImages) {
+    let imageCount = 0;
+    for (let i = 0; i < faqs.length; i += 3) {
+      const batch = faqs.slice(i, i + 3);
+      const results = await Promise.all(
+        batch.map((faq) => extractPageImages(notion, faq.notionPageId!))
+      );
+      for (let j = 0; j < batch.length; j++) {
+        if (results[j].length > 0) {
+          batch[j].images = results[j];
+          imageCount += results[j].length;
+        }
+      }
+      // Rate limit pause between batches
+      if (i + 3 < faqs.length) await new Promise((r) => setTimeout(r, 1100));
+    }
+    if (imageCount > 0) logger.info(`FAQ sync: mirrored ${imageCount} images`);
+  }
+
   return faqs;
 }
 
-export async function syncFaqs(): Promise<KvFaq[]> {
-  const faqs = await fetchFaqsFromNotion();
+/** Fetch FAQ section names from the FAQ Sections database in Notion */
+async function fetchSectionNames(): Promise<Map<string, { nl: string; en: string; de: string }>> {
+  const apiKey = process.env.NOTION_API_KEY;
+  const sectionDbId = process.env.NOTION_FAQ_SECTIONS_DATABASE_ID;
+  if (!apiKey || !sectionDbId) return new Map();
+
+  const notion = new Client({ auth: apiKey });
+  const resp = await notion.databases.query({ database_id: sectionDbId, page_size: 50 });
+  const sections = new Map<string, { nl: string; en: string; de: string }>();
+
+  for (const page of resp.results) {
+    if (!("properties" in page)) continue;
+    const props = page.properties as Record<string, unknown>;
+    const slug = getRichText(props, "Slug");
+    if (!slug) continue;
+    const nameEn = (() => {
+      for (const v of Object.values(props)) {
+        const p = v as { type: string; title?: { plain_text: string }[] };
+        if (p.type === "title" && p.title?.length) return p.title.map((t) => t.plain_text).join("");
+      }
+      return "";
+    })();
+    const nameNl = getRichText(props, "Name (NL)") || nameEn;
+    const nameDe = getRichText(props, "Name (DE)") || nameEn;
+    sections.set(slug, { nl: nameNl, en: nameEn, de: nameDe });
+  }
+  return sections;
+}
+
+/** Build grouped FAQ JSON for Shopify metafield (per language) */
+function buildShopifyFaqJson(
+  faqs: KvFaq[],
+  sections: Map<string, { nl: string; en: string; de: string }>,
+  lang: "nl" | "en" | "de",
+): { slug: string; section: string; questions: { q: string; a: string }[] }[] {
+  const websiteFaqs = faqs.filter((f) => f.website);
+  const grouped = new Map<string, { section: string; questions: { q: string; a: string }[] }>();
+
+  for (const faq of websiteFaqs) {
+    const slug = faq.sectionSlug || "";
+    if (!grouped.has(slug)) {
+      const sectionNames = sections.get(slug);
+      const sectionName = sectionNames ? sectionNames[lang] : slug;
+      grouped.set(slug, { section: sectionName, questions: [] });
+    }
+    const q = lang === "nl" ? (faq.questionNl || faq.question)
+            : lang === "de" ? (faq.questionDe || faq.question)
+            : faq.question;
+    const a = lang === "nl" ? (faq.answerNl || faq.answer)
+            : lang === "de" ? (faq.answerDe || faq.answer)
+            : faq.answer;
+    if (q && a) {
+      grouped.get(slug)!.questions.push({ q, a });
+    }
+  }
+
+  return Array.from(grouped.entries()).map(([slug, data]) => ({
+    slug,
+    section: data.section,
+    questions: data.questions,
+  }));
+}
+
+export async function syncFaqs(options?: { skipImages?: boolean }): Promise<KvFaq[]> {
+  const faqs = await fetchFaqsFromNotion(options?.skipImages);
   const data: KvFaqsData = { faqs, cachedAt: Date.now() };
   cachedFaqs = data;
   cacheTimestamp = Date.now();
   await setKvFaqs(data);
+
+  // Push FAQ metafields to Shopify (non-fatal)
+  if (process.env.SHOPIFY_ADMIN_CLIENT_ID) {
+    try {
+      const sections = await fetchSectionNames();
+      const nl = buildShopifyFaqJson(faqs, sections, "nl");
+      const en = buildShopifyFaqJson(faqs, sections, "en");
+      const de = buildShopifyFaqJson(faqs, sections, "de");
+      await pushFaqMetafields(nl, en, de);
+    } catch (err) {
+      logger.error("Failed to push FAQ metafields to Shopify", { error: String(err) });
+    }
+  }
+
   return faqs;
 }
 
@@ -173,8 +326,8 @@ export async function getFaqs(cacheOnly = false): Promise<KvFaq[]> {
   // In cache-only mode, don't trigger a full sync (let warm-up handle it)
   if (cacheOnly) return [];
 
-  // L3: Fetch from Notion
-  return syncFaqs();
+  // L3: Fetch from Notion (skip images for speed — images sync via /api/sync-faqs)
+  return syncFaqs({ skipImages: true });
 }
 
 function getFaqQuestion(faq: KvFaq, lang: string): string {
@@ -189,13 +342,26 @@ function getFaqAnswer(faq: KvFaq, lang: string): string {
   return faq.answer;
 }
 
+/** Get answer text with image markdown appended */
+export function getFaqAnswerWithImages(faq: KvFaq, lang: string): string {
+  let answer = getFaqAnswer(faq, lang);
+  if (faq.images && faq.images.length > 0) {
+    const imgMd = faq.images
+      .map((img) => `![${img.caption || ""}](${img.url})`)
+      .join("\n\n");
+    answer = answer ? `${answer}\n\n${imgMd}` : imgMd;
+  }
+  return answer;
+}
+
 export function buildFaqContext(faqs: KvFaq[], lang = "en"): string {
   if (faqs.length === 0) return "";
   const filtered = faqs.filter((f) => getFaqAnswer(f, lang));
   // TOON-style tabular format: minimizes repeated keys for token efficiency
   const rows = filtered.map((f) => {
     const q = getFaqQuestion(f, lang);
-    const a = getFaqAnswer(f, lang);
+    // Include images as markdown directly in the answer text
+    const a = getFaqAnswerWithImages(f, lang);
     const link = f.url || "";
     return `${q}\t${a}\t${link}`;
   });

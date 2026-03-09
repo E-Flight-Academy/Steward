@@ -254,6 +254,7 @@ export async function POST(request: NextRequest) {
         `Today's date is: ${new Date().toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}.`,
         `Your tone of voice is: ${toneOfVoice}.`,
         "ONLY use the data provided in the user's message. Do not invent or fabricate details.",
+        "The reader is an INSTRUCTOR, not a student. Never start with greetings like 'Hello [name]' or address the student directly. Write concise, professional summaries for the instructor.",
         `MANDATORY: Always respond in the SAME language as the user's message. The user's current language preference is: ${clientLang || "en"}.`,
         "LANGUAGE TAG: End your response with a [lang: xx] tag with the ISO 639-1 code of the language you responded in.",
       );
@@ -324,7 +325,8 @@ export async function POST(request: NextRequest) {
 
     instructionParts.push(
       `MANDATORY: Always respond in the SAME language as the user's message. If the user writes in Dutch, you MUST respond in Dutch. If in German, respond in German. If in English, respond in English. The user's current language preference is: ${clientLang || "en"}. Never say you cannot respond in a language - just respond in whatever language the user uses.`,
-      "LANGUAGE TAG: After the [source: ...] tag, add a [lang: xx] tag with the ISO 639-1 code of the language you responded in. For example: [lang: nl] for Dutch, [lang: en] for English, [lang: de] for German. This must be the very last tag in your response."
+      "LANGUAGE TAG: After the [source: ...] tag, add a [lang: xx] tag with the ISO 639-1 code of the language you responded in. For example: [lang: nl] for Dutch, [lang: en] for English, [lang: de] for German. This must be the very last tag in your response.",
+      "IMAGES: Some FAQ entries include image URLs in an 'images' column. When your answer uses information from a FAQ that has images, include the images in your response using markdown: ![description](url). Place images after the relevant text. Only use image URLs that appear in the FAQ data — never make up image URLs."
     );
 
     // Append guided flow context if present
@@ -471,7 +473,7 @@ export async function POST(request: NextRequest) {
 
     console.log(`[Context] Total: ${totalChars.toLocaleString()} chars (~${Math.round(totalChars / 4).toLocaleString()} tokens, excl. binary)`);
 
-    const modelId = focused ? "gemini-2.0-flash" : "gemini-2.5-flash";
+    const modelId = "gemini-2.5-flash";
     console.log(`[Model] ${modelId}${focused ? " (focused)" : ""}`);
     const model = genAI.getGenerativeModel({
       model: modelId,

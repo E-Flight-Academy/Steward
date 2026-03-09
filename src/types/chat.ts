@@ -32,7 +32,10 @@ export interface BookingFlight {
 
 export interface BookingLesson {
   id: number;
+  planId: number | null;
   planName: string | null;
+  courseId: number | null;
+  courseName: string | null;
   isAssessment: boolean;
   description: string | null;
   prep: string | null;
@@ -149,6 +152,7 @@ export interface BriefingData {
   studentName: string;
   exerciseNumber: number;
   isNextLesson: boolean;
+  isPreviousLesson: boolean;
   lang: "en" | "nl";
   wingsPrep: string | null;
   wingsBriefing: string | null;
@@ -204,12 +208,38 @@ export interface FlowStep {
   trigger: string | null;
 }
 
+export interface CardActionSubStep {
+  name: string;
+  label: string;
+  labelNl: string;
+  /** key=value pairs to accumulate, e.g. "lessonChoice=current" */
+  contextValue: string;
+  /** If true, hide this option when its template vars can't be resolved */
+  hideIfEmpty?: boolean;
+}
+
+export interface CardActionStep {
+  name: string;
+  options: CardActionSubStep[];
+}
+
 export interface CardAction {
   name: string;
   label: string;
   icon: string | null;
   contextKey: string;
   endPrompt: string;
+  /** Multi-step sub-flow: each step shows options, final step dispatches action */
+  subSteps?: CardActionStep[];
+  /** Template for building the final action string from accumulated context */
+  actionTemplate?: string;
+}
+
+export interface CardSubFlowState {
+  rootAction: CardAction;
+  stepIndex: number;
+  accumulatedContext: Record<string, string>;
+  bookingContext: Record<string, string>;
 }
 
 export type FlowPhase = "loading" | "active" | "completed" | "skipped";

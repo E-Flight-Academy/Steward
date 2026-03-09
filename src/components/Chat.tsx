@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { useI18n } from "@/lib/i18n/context";
 import type { UiLabels } from "@/lib/i18n/labels";
 const FaqModal = lazy(() => import("./FaqModal"));
-import type { Message, FlowOption, FlowStep, StructuredContent, CardAction } from "@/types/chat";
+import type { Message, FlowOption, FlowStep, StructuredContent, CardAction, CardActionStep } from "@/types/chat";
 import { fetchRetry } from "@/lib/fetch-retry";
 
 import { useKbStatus } from "@/hooks/useKbStatus";
@@ -14,6 +14,7 @@ import { useRating } from "@/hooks/useRating";
 import { useFlow, buildMergedWelcomeStep } from "@/hooks/useFlow";
 import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
 import { useFaqAdmin } from "@/hooks/useFaqAdmin";
+import { useCardSubFlow } from "@/hooks/useCardSubFlow";
 
 import ChatHeader from "./chat/ChatHeader";
 import WelcomeScreen from "./chat/WelcomeScreen";
@@ -32,7 +33,7 @@ export default function Chat() {
   const [isLoading, setIsLoading] = useState(false);
   const [sendAnimating, setSendAnimating] = useState(false);
   const [starters, setStarters] = useState<{ question: string; questionNl: string; questionDe: string; answer: string; answerNl: string; answerDe: string }[]>([]);
-  const [faqs, setFaqs] = useState<{ question: string; questionNl: string; questionDe: string; answer: string; answerNl: string; answerDe: string; category: string[]; audience: string[]; url: string }[]>([]);
+  const [faqs, setFaqs] = useState<{ question: string; questionNl: string; questionDe: string; answer: string; answerNl: string; answerDe: string; category: string[]; audience: string[]; url: string; images?: { url: string; caption?: string }[] }[]>([]);
   const [showFaqModal, setShowFaqModal] = useState(false);
   const [phIndex, setPhIndex] = useState(0);
   const [phVisible, setPhVisible] = useState(true);
@@ -182,7 +183,16 @@ export default function Chat() {
       f.questionNl.toLowerCase() === q ||
       f.questionDe.toLowerCase() === q
     );
-    if (faq) { const a = getA(faq); if (a) return { answer: a, url: faq.url || undefined, question: getQ(faq) }; }
+    if (faq) {
+      let a = getA(faq);
+      if (a) {
+        if (faq.images?.length) {
+          const imgMd = faq.images.map((img: { url: string; caption?: string }) => `![${img.caption || ""}](${img.url})`).join("\n\n");
+          a = `${a}\n\n${imgMd}`;
+        }
+        return { answer: a, url: faq.url || undefined, question: getQ(faq) };
+      }
+    }
     return null;
   };
 
@@ -277,6 +287,23 @@ export default function Chat() {
     reset: resetAdmin,
     handleAdminInput,
   } = useFaqAdmin({ faqs, setFaqs, setMessages, lang });
+
+  const {
+    subFlow,
+    startSubFlow,
+    handleSubFlowOption,
+    handleSubFlowBack,
+    handleSubFlowCancel,
+    getVisibleOptions,
+  } = useCardSubFlow({
+    messages,
+    setMessages,
+    setIsLoading,
+    setProgressSteps,
+    lang,
+    userEmailOverride,
+    roleOverride,
+  });
 
   const sendMessage = useCallback(async (text: string, baseMessages?: Message[], hidden = false, focused = false) => {
     if (!text.trim()) return;
@@ -499,7 +526,13 @@ export default function Chat() {
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || "Failed to load data");
+        const detail = data.error || "Unknown error";
+        throw new Error(
+          res.status === 403 ? `Not authorized: ${detail}`
+          : res.status === 400 ? `Invalid request: ${detail}`
+          : res.status === 404 ? `Data not found: ${detail}`
+          : `Failed (${res.status}): ${detail}`
+        );
       }
       const structured: StructuredContent = await res.json();
       setMessages((prev) => [...prev, {
@@ -517,49 +550,46 @@ export default function Chat() {
 
   capabilityActionRef.current = handleCapabilityAction;
 
-  const handleBriefingRequest = useCallback(async (action: string, context: Record<string, string>) => {
-    setIsLoading(true);
-    setProgressSteps(["Generating briefing..."]);
-    try {
-      const params: Record<string, unknown> = {
-        action,
-        bookingId: context.bookingId ? Number(context.bookingId) : undefined,
-        studentUserId: context.studentUserId ? Number(context.studentUserId) : undefined,
-        studentName: context.studentName,
-      };
-      if (userEmailOverride) params.userEmail = userEmailOverride;
-      if (roleOverride) params.roleOverride = roleOverride;
-
-      const res = await fetch("/api/capability-action", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(params),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || "Failed to generate briefing");
-      }
-      const structured: StructuredContent = await res.json();
-      setMessages((prev) => [...prev, {
-        role: "assistant",
-        content: structured.summary,
-        structured,
-      }]);
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : "Something went wrong";
-      setMessages((prev) => [...prev, { role: "assistant", content: errorMsg }]);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [userEmailOverride, roleOverride]);
-
   // Card actions from flow steps with trigger
-  const bookingDetailActions = useMemo<CardAction[]>(() =>
-    flowSteps
+  // Sub-steps are defined per action — when a card action has subSteps, clicking it starts a multi-step picker
+  const bookingDetailActions = useMemo<CardAction[]>(() => {
+    // Define sub-step configurations for actions that need multi-step flows
+    const subStepConfigs: Record<string, { steps: CardActionStep[]; actionTemplate: string }> = {
+      "lesson-briefing": {
+        actionTemplate: "lesson-briefing-{lessonChoice}-{lang}",
+        steps: [
+          {
+            name: "lesson-choice",
+            options: [
+              { name: "current", label: "This lesson ({currentLessonName})", labelNl: "Deze les ({currentLessonName})", contextValue: "lessonChoice=current", hideIfEmpty: false },
+              { name: "previous", label: "Previous lesson ({previousLessonName})", labelNl: "Vorige les ({previousLessonName})", contextValue: "lessonChoice=previous", hideIfEmpty: true },
+            ],
+          },
+          {
+            name: "language",
+            options: [
+              { name: "en", label: "English", labelNl: "English", contextValue: "lang=en" },
+              { name: "nl", label: "Nederlands", labelNl: "Nederlands", contextValue: "lang=nl" },
+            ],
+          },
+        ],
+      },
+    };
+
+    return flowSteps
       .filter((s) => s.trigger?.split(",").includes("booking-detail"))
-      .map((s) => ({ name: s.name, label: s.message || s.name, icon: null, contextKey: s.contextKey, endPrompt: s.endPrompt })),
-    [flowSteps]
-  );
+      .map((s) => {
+        const config = subStepConfigs[s.contextKey];
+        return {
+          name: s.name,
+          label: s.message || s.name,
+          icon: null,
+          contextKey: s.contextKey,
+          endPrompt: s.endPrompt,
+          ...(config && { subSteps: config.steps, actionTemplate: config.actionTemplate }),
+        };
+      });
+  }, [flowSteps]);
 
   const handleCardAction = useCallback(async (action: CardAction, context: Record<string, string>) => {
     setIsLoading(true);
@@ -583,7 +613,13 @@ export default function Chat() {
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || "Failed to load data");
+        const detail = data.error || "Unknown error";
+        throw new Error(
+          res.status === 403 ? `Not authorized: ${detail}`
+          : res.status === 400 ? `Invalid request: ${detail}`
+          : res.status === 404 ? `Data not found: ${detail}`
+          : `Failed (${res.status}): ${detail}`
+        );
       }
       const result = await res.json();
 
@@ -607,6 +643,7 @@ export default function Chat() {
       }
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : "Something went wrong";
+      console.error("[handleCardAction]", action.contextKey, err);
       setMessages((prev) => [...prev, { role: "assistant", content: errorMsg }]);
     } finally {
       setIsLoading(false);
@@ -1027,7 +1064,12 @@ export default function Chat() {
             onBookingClick={handleBookingClick}
             cardActions={bookingDetailActions}
             onCardAction={handleCardAction}
-            onBriefingRequest={handleBriefingRequest}
+            subFlow={subFlow}
+            onStartSubFlow={startSubFlow}
+            onSubFlowOption={handleSubFlowOption}
+            onSubFlowBack={handleSubFlowBack}
+            onSubFlowCancel={handleSubFlowCancel}
+            getVisibleSubFlowOptions={getVisibleOptions}
           />
         )}
 

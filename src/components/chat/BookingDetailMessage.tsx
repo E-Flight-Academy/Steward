@@ -226,7 +226,7 @@ export default function BookingDetailMessage({ data, onBookingClick }: BookingDe
         </div>
         <div>
           <span className="text-e-grey">Course</span>
-          <p className="font-medium">{data.type}</p>
+          <p className="font-medium">{data.lessons[0]?.courseName || data.type}</p>
         </div>
         <div>
           <span className="text-e-grey">Lesson</span>
@@ -259,23 +259,15 @@ export default function BookingDetailMessage({ data, onBookingClick }: BookingDe
         )
       ))}
 
-      {/* Previous lesson */}
+      {/* Previous lesson (from course sequence) */}
       {data.previousLesson ? (
         <div className="text-sm">
-          <span className="text-e-grey text-xs">Previous lesson</span>
-          <button
-            onClick={() => onBookingClick?.(
-              data.previousLesson!.bookingId,
-              data.previousLesson!.date,
-              "",
-              data.student,
-            )}
-            className={`flex items-center gap-1.5 mt-0.5 px-2 py-1 rounded-lg transition-colors cursor-pointer hover:bg-[#F2F2F2] dark:hover:bg-gray-800 ${
-              data.previousLesson.isAssessment
-                ? "bg-[#ECD3F4]/30 hover:bg-[#ECD3F4]/50"
-                : "bg-[#F7F7F7] dark:bg-gray-800"
-            }`}
-          >
+          <span className="text-e-grey text-xs">Previous lesson in course</span>
+          <div className={`flex items-center gap-1.5 mt-0.5 px-2 py-1 rounded-lg ${
+            data.previousLesson.isAssessment
+              ? "bg-[#ECD3F4]/30"
+              : "bg-[#F7F7F7] dark:bg-gray-800"
+          }`}>
             <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${
               data.previousLesson.isAssessment
                 ? "bg-[#ECD3F4] text-[#7B2D8E] dark:bg-[#7B2D8E]/20 dark:text-[#DFB6EE]"
@@ -286,18 +278,14 @@ export default function BookingDetailMessage({ data, onBookingClick }: BookingDe
             {data.previousLesson.status && (
               <span className="text-xs text-e-grey">{data.previousLesson.status}</span>
             )}
-            <span className="text-xs text-e-grey">· {data.previousLesson.date.split("-").reverse().join("-")}</span>
-            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-e-grey shrink-0">
-              <polyline points="9 18 15 12 9 6" />
-            </svg>
-          </button>
+          </div>
         </div>
-      ) : (
+      ) : data.lessons[0]?.courseName ? (
         <div className="text-sm">
-          <span className="text-e-grey text-xs">Previous lesson</span>
-          <p className="text-e-grey mt-0.5">No previous lesson found</p>
+          <span className="text-e-grey text-xs">Previous lesson in course</span>
+          <p className="text-e-grey mt-0.5">This is the first lesson in the course</p>
         </div>
-      )}
+      ) : null}
 
       {/* Document validity */}
       {data.userDocuments.length > 0 && (() => {
@@ -341,11 +329,11 @@ export default function BookingDetailMessage({ data, onBookingClick }: BookingDe
           {filteredUsers.map((user) => (
             <div key={user.userName} className="space-y-1">
               <a href={`https://eflight.oywings.com/students?search=${encodeURIComponent(user.userName)}`} target="_blank" rel="noopener noreferrer" className="text-xs font-semibold text-foreground hover:text-[#1515F5] transition-colors">{user.userName}</a>
-              {user.documents.map((doc) => {
+              {user.documents.map((doc, docIdx) => {
                 const isWarning = !isPast && !doc.isExpired && doc.daysRemaining <= 14;
                 return (
                   <div
-                    key={doc.name}
+                    key={`${doc.name}-${docIdx}`}
                     className="flex items-center justify-between text-sm bg-[#F7F7F7] dark:bg-gray-800 rounded-lg px-2.5 py-1.5"
                   >
                     <div className="flex items-center gap-2 min-w-0">
@@ -369,7 +357,7 @@ export default function BookingDetailMessage({ data, onBookingClick }: BookingDe
                     >
                       {doc.isExpired
                         ? `Expired ${Math.abs(doc.daysRemaining)}d ago`
-                        : `${doc.daysRemaining}d · ${doc.expires}`}
+                        : `${doc.daysRemaining}d · ${doc.expires.split("-").reverse().join("-")}`}
                     </span>
                   </div>
                 );
@@ -435,7 +423,7 @@ export default function BookingDetailMessage({ data, onBookingClick }: BookingDe
                       >
                         {doc.isExpired
                           ? `Expired ${Math.abs(doc.daysRemaining)}d ago`
-                          : `${doc.daysRemaining}d · ${doc.expires}`}
+                          : `${doc.daysRemaining}d · ${doc.expires.split("-").reverse().join("-")}`}
                       </span>
                     </div>
                   );
@@ -453,15 +441,13 @@ export default function BookingDetailMessage({ data, onBookingClick }: BookingDe
                     className="text-sm bg-[#F7F7F7] dark:bg-gray-800 rounded-lg px-2.5 py-1.5"
                   >
                     <div className="flex items-center gap-2">
+                      {r.isNew && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 shrink-0">
+                          NEW
+                        </span>
+                      )}
                       <span className="flex-1 min-w-0 truncate">{r.remark}</span>
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        {r.isNew && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
-                            NEW
-                          </span>
-                        )}
-                        <span className="text-xs text-e-grey">{r.daysAgo}d ago</span>
-                      </div>
+                      <span className="text-xs text-e-grey shrink-0">{r.daysAgo}d ago</span>
                     </div>
                   </div>
                 ))}

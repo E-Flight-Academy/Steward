@@ -65,9 +65,11 @@ export default function BriefingMessage({ data, summary }: BriefingMessageProps)
     });
   };
 
-  const nextLabel = data.isNextLesson
-    ? (data.lang === "nl" ? "Volgende les" : "Next lesson")
-    : (data.lang === "nl" ? "Deze les" : "This lesson");
+  const badgeLabel = data.isPreviousLesson
+    ? (data.lang === "nl" ? "Vorige les" : "Previous lesson")
+    : data.isNextLesson
+      ? (data.lang === "nl" ? "Volgende les" : "Next lesson")
+      : (data.lang === "nl" ? "Deze les" : "This lesson");
 
   return (
     <div className="space-y-3">
@@ -75,11 +77,13 @@ export default function BriefingMessage({ data, summary }: BriefingMessageProps)
       <div>
         <div className="flex items-center gap-2">
           <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-            data.isNextLesson
-              ? "bg-[#DCF9FF] text-[#0077A3]"
-              : "bg-[#DAF4EC] text-[#1B7A57]"
+            data.isPreviousLesson
+              ? "bg-[#ECD3F4] text-[#8B3BA8]"
+              : data.isNextLesson
+                ? "bg-[#DCF9FF] text-[#0077A3]"
+                : "bg-[#DAF4EC] text-[#1B7A57]"
           }`}>
-            {nextLabel}
+            {badgeLabel}
           </span>
           <span className="text-xs text-e-grey">#{data.exerciseNumber}</span>
         </div>
@@ -105,7 +109,7 @@ export default function BriefingMessage({ data, summary }: BriefingMessageProps)
               </svg>
             </button>
             {expandedSections.has(i) && (
-              <div className="px-3 pb-3 prose prose-sm dark:prose-invert max-w-none prose-p:my-1 prose-ul:my-1 prose-li:my-0.5 prose-headings:my-1.5 text-sm">
+              <div className="px-3 pb-3 prose dark:prose-invert max-w-none prose-p:my-1 prose-ul:my-1 prose-li:my-0.5 prose-headings:my-1.5">
                 <ReactMarkdown>{section.content}</ReactMarkdown>
               </div>
             )}

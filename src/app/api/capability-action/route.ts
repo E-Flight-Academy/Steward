@@ -3,7 +3,7 @@ import { z } from "zod";
 import { getSession } from "@/lib/shopify-auth";
 import { getUserData } from "@/lib/airtable";
 import { getCapabilitiesForRoles } from "@/lib/role-access";
-import { getInstructorBookingsExpanded, getBookingDetail, getUserDocuments, getDocumentValidities, getAircraftStatus, getPreviousLessonBooking, getStudentLessonHistory, getCourseLessonPlans, type WingsBooking } from "@/lib/wings";
+import { getInstructorBookingsExpanded, getBookingDetail, getUserDocuments, getDocumentValidities, getAircraftStatus, getStudentLessonHistory, getCourseLessonPlans, type WingsBooking } from "@/lib/wings";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { queryDocuments } from "@/lib/vector";
 import { getFoldersForRoles } from "@/lib/role-access";
@@ -13,9 +13,11 @@ import type { ScheduleDay, ScheduleBooking, BookingDetail, BookingLesson, Bookin
 const requestSchema = z.object({
   action: z.string().min(1).max(100),
   bookingId: z.number().int().positive().optional(),
+  courseId: z.number().int().positive().optional(),
   previousLessonBookingId: z.number().int().positive().optional(),
   studentUserId: z.number().int().positive().optional(),
   studentName: z.string().max(200).optional(),
+  endPrompt: z.string().max(5000).optional(),
   userEmail: z.string().email().max(200).optional(),
   roleOverride: z.array(z.string().max(50)).optional(),
 });
@@ -117,6 +119,22 @@ export async function POST(request: NextRequest) {
     }
 
     // Dispatch by action
+
+    // Lightweight course plans lookup — used by sub-flow to resolve previous lesson name
+    if (action === "course-plans") {
+      if (!capabilities.includes("instructor-schedule")) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+      }
+      const courseId = parsed.data.courseId;
+      if (!courseId) {
+        return NextResponse.json({ error: "courseId is required" }, { status: 400 });
+      }
+      const plans = await getCourseLessonPlans(courseId);
+      return NextResponse.json({
+        plans: plans.map((p) => ({ id: p.id, sequence: p.sequence, name: p.name, isAssessment: p.isAssessment })),
+      });
+    }
+
     if (action === "instructor-schedule") {
       if (!capabilities.includes("instructor-schedule")) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
@@ -165,12 +183,64 @@ export async function POST(request: NextRequest) {
       if (raw.instructor?.id) docUserIds.push({ id: raw.instructor.id, name: raw.instructor.name });
 
       const callSign = raw.aircraft?.callSign || null;
-      const bookingDate = raw.from.slice(0, 10);
-      const [docResults, acStatus, prevLesson] = await Promise.all([
+
+      // Resolve course context: either from the booking's lesson plan, or from student history
+      const firstLesson = raw.lessons[0];
+      const hasCourse = firstLesson?.plan?.id && firstLesson.plan.course?.id;
+
+      const [docResults, acStatus, coursePlansForPrev, studentHistory] = await Promise.all([
         Promise.all(docUserIds.map((u) => getUserDocuments(u.id))),
         callSign ? getAircraftStatus(callSign) : Promise.resolve(null),
-        studentUser?.id ? getPreviousLessonBooking(studentUser.id, bookingDate) : Promise.resolve(null),
+        hasCourse ? getCourseLessonPlans(firstLesson.plan!.course!.id) : Promise.resolve([]),
+        // If no lesson plan linked, fetch student history to infer course progress
+        !hasCourse && studentUser?.id ? getStudentLessonHistory(studentUser.id, 10) : Promise.resolve([]),
       ]);
+
+      let previousLesson: PreviousLesson | null = null;
+      // Extra fields to enrich the booking when lesson plan is missing
+      let inferredCourseId: number | null = null;
+      let inferredCourseName: string | null = null;
+      let inferredPlanId: number | null = null;
+      let inferredPlanName: string | null = null;
+
+      if (hasCourse && coursePlansForPrev.length > 0) {
+        // Booking has a lesson plan — find previous in course sequence
+        const currentIdx = coursePlansForPrev.findIndex((p) => p.id === firstLesson.plan!.id);
+        if (currentIdx > 0) {
+          const prevPlan = coursePlansForPrev[currentIdx - 1];
+          previousLesson = {
+            bookingId: 0,
+            date: "",
+            planName: prevPlan.name,
+            isAssessment: prevPlan.isAssessment,
+            status: null,
+          };
+        }
+      } else if (studentHistory.length > 0) {
+        // No lesson plan on booking — infer from student's most recent lesson with a course
+        const lastWithCourse = studentHistory.find((l) => l.courseId && l.planId);
+        if (lastWithCourse) {
+          inferredCourseId = lastWithCourse.courseId;
+          inferredCourseName = lastWithCourse.courseName;
+          // Fetch course plans to find the next lesson after the student's last one
+          const coursePlans = await getCourseLessonPlans(lastWithCourse.courseId!);
+          const lastIdx = coursePlans.findIndex((p) => p.id === lastWithCourse.planId);
+          if (lastIdx >= 0 && lastIdx < coursePlans.length - 1) {
+            // Next lesson in course = the one this booking is probably for
+            const nextPlan = coursePlans[lastIdx + 1];
+            inferredPlanId = nextPlan.id;
+            inferredPlanName = nextPlan.name;
+            // The "previous lesson" is the student's last completed one
+            previousLesson = {
+              bookingId: lastWithCourse.bookingId,
+              date: lastWithCourse.date,
+              planName: lastWithCourse.planName || "—",
+              isAssessment: lastWithCourse.isAssessment,
+              status: lastWithCourse.status,
+            };
+          }
+        }
+      }
 
       const now = new Date();
       const userDocuments: UserDocuments[] = docResults
@@ -246,7 +316,10 @@ export async function POST(request: NextRequest) {
         wingsLink: `https://eflight.oywings.com/bookings?date=${date}`,
         lessons: raw.lessons.map((l): BookingLesson => ({
           id: l.id,
-          planName: l.plan?.name || null,
+          planId: l.plan?.id || inferredPlanId,
+          planName: l.plan?.name || inferredPlanName,
+          courseId: l.plan?.course?.id || inferredCourseId,
+          courseName: l.plan?.course?.name || inferredCourseName,
           isAssessment: l.plan?.isAssessment || false,
           description: l.plan?.description || null,
           prep: l.plan?.prep || null,
@@ -277,13 +350,7 @@ export async function POST(request: NextRequest) {
         } : null,
         userDocuments,
         aircraftStatus,
-        previousLesson: prevLesson ? {
-          bookingId: prevLesson.bookingId,
-          date: prevLesson.date,
-          planName: prevLesson.planName,
-          isAssessment: prevLesson.isAssessment,
-          status: prevLesson.status,
-        } : null,
+        previousLesson,
       };
 
       const timeStr = `${detail.timeFrom}–${detail.timeTo}`;
@@ -502,11 +569,11 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "bookingId is required" }, { status: 400 });
       }
 
-      // Parse action: lesson-briefing-{current|next}-{en|nl}
+      // Parse action: lesson-briefing-{current|previous}-{en|nl}
       const parts = action.split("-");
-      const lessonChoice = parts[2] as "current" | "next"; // current or next
+      const lessonChoice = parts[2] as "current" | "previous";
       const lang = parts[3] as "en" | "nl";
-      if (!["current", "next"].includes(lessonChoice) || !["en", "nl"].includes(lang)) {
+      if (!["current", "previous"].includes(lessonChoice) || !["en", "nl"].includes(lang)) {
         return NextResponse.json({ error: "Invalid lesson-briefing action format" }, { status: 400 });
       }
 
@@ -526,15 +593,15 @@ export async function POST(request: NextRequest) {
       const studentUser = raw.user || raw.customer;
       const studentName = studentUser?.name || raw.eventTitle || "Student";
 
-      // 2. Determine target exercise (current or next)
+      // 2. Determine target exercise (current or previous)
       const coursePlans = await getCourseLessonPlans(courseId);
       const currentIdx = coursePlans.findIndex((p) => p.id === lesson.plan!.id);
       let targetPlan = coursePlans[currentIdx] || null;
-      let isNextLesson = false;
+      let isPreviousLesson = false;
 
-      if (lessonChoice === "next" && currentIdx >= 0 && currentIdx < coursePlans.length - 1) {
-        targetPlan = coursePlans[currentIdx + 1];
-        isNextLesson = true;
+      if (lessonChoice === "previous" && currentIdx > 0) {
+        targetPlan = coursePlans[currentIdx - 1];
+        isPreviousLesson = true;
       }
 
       if (!targetPlan) {
@@ -609,7 +676,7 @@ Keep each section concise and practical. Use bullet points where appropriate. Fo
       // 7. Call Gemini
       const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
       const model = genAI.getGenerativeModel({
-        model: "gemini-2.0-flash",
+        model: "gemini-2.5-flash",
         generationConfig: { temperature: 0.3, responseMimeType: "application/json" },
       });
 
@@ -630,7 +697,8 @@ Keep each section concise and practical. Use bullet points where appropriate. Fo
         courseName,
         studentName,
         exerciseNumber: targetPlan.sequence,
-        isNextLesson,
+        isNextLesson: false,
+        isPreviousLesson,
         lang,
         wingsPrep: targetPlan.prep,
         wingsBriefing: targetPlan.briefing,
@@ -639,8 +707,8 @@ Keep each section concise and practical. Use bullet points where appropriate. Fo
         studentContext,
       };
 
-      const lessonLabel = isNextLesson
-        ? (lang === "nl" ? "Volgende les" : "Next lesson")
+      const lessonLabel = isPreviousLesson
+        ? (lang === "nl" ? "Vorige les" : "Previous lesson")
         : (lang === "nl" ? "Deze les" : "This lesson");
 
       return NextResponse.json({

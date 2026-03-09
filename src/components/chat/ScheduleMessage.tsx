@@ -10,7 +10,7 @@ interface ScheduleMessageProps {
   onBookingClick?: (bookingId: number, date: string, time: string, student: string) => void;
 }
 
-type Tab = "upcoming" | "today" | "past";
+type Tab = "upcoming" | "past";
 
 export default function ScheduleMessage({ data, summary, onBookingClick }: ScheduleMessageProps) {
   const now = new Date();
@@ -18,21 +18,19 @@ export default function ScheduleMessage({ data, summary, onBookingClick }: Sched
   const currentTime = now.toTimeString().slice(0, 5);
 
   const pastDays = data.filter((d) => d.date < today);
-  const todayDays = data.filter((d) => d.date === today);
-  const upcomingDays = data.filter((d) => d.date > today);
+  const upcomingDays = data.filter((d) => d.date >= today); // includes today
 
-  const defaultTab: Tab = upcomingDays.length > 0 ? "upcoming" : todayDays.length > 0 ? "today" : "past";
+  const defaultTab: Tab = upcomingDays.length > 0 ? "upcoming" : "past";
   const [activeTab, setActiveTab] = useState<Tab>(defaultTab);
   const [showAllDays, setShowAllDays] = useState(false);
   const MAX_DAYS_COLLAPSED = 2;
 
   const tabs: { key: Tab; label: string; count: number }[] = [
     { key: "upcoming", label: "Upcoming", count: upcomingDays.reduce((s, d) => s + d.bookings.length, 0) },
-    { key: "today", label: "Today", count: todayDays.reduce((s, d) => s + d.bookings.length, 0) },
     { key: "past", label: "Past", count: pastDays.reduce((s, d) => s + d.bookings.length, 0) },
   ];
 
-  const activeDays = activeTab === "upcoming" ? upcomingDays : activeTab === "today" ? todayDays : pastDays;
+  const activeDays = activeTab === "upcoming" ? upcomingDays : pastDays;
 
   const isBookingPast = (day: ScheduleDay, timeFrom: string) => {
     if (day.date === today && timeFrom <= currentTime) return true;
@@ -57,8 +55,8 @@ export default function ScheduleMessage({ data, summary, onBookingClick }: Sched
 
       {/* Day cards — render all tabs in a grid so width is stable, height adapts */}
       <div className="grid">
-        {(["upcoming", "today", "past"] as Tab[]).map((tabKey) => {
-          const days = tabKey === "upcoming" ? upcomingDays : tabKey === "today" ? todayDays : pastDays;
+        {(["upcoming", "past"] as Tab[]).map((tabKey) => {
+          const days = tabKey === "upcoming" ? upcomingDays : pastDays;
           const visible = activeTab === tabKey;
           return (
             <div
@@ -68,7 +66,7 @@ export default function ScheduleMessage({ data, summary, onBookingClick }: Sched
             >
               {days.length === 0 ? (
                 <p className="text-sm text-e-grey text-center py-3">
-                  {tabKey === "upcoming" ? "No upcoming lessons" : tabKey === "today" ? "No lessons today" : "No past lessons"}
+                  {tabKey === "upcoming" ? "No upcoming lessons" : "No past lessons"}
                 </p>
               ) : (<>
                 {(showAllDays ? days : days.slice(0, MAX_DAYS_COLLAPSED)).map((day) => (

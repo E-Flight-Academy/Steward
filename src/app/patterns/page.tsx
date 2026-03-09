@@ -60,6 +60,25 @@ export default function PatternsPage() {
           <CodeRef>FlowOptions.tsx, FeedbackFollowUp.tsx</CodeRef>
         </Section>
 
+        {/* ===== SECONDARY PILL ===== */}
+        <Section title="Secondary Pill" description="White bg pill with grey text for cancel/back actions alongside primary pills.">
+          <div className="flex flex-wrap gap-2">
+            <button className="font-semibold rounded-full border border-[#ECECEC] bg-[#F7F7F7] text-[#030213] hover:bg-[#1515F5] hover:text-white hover:border-[#1515F5] transition-colors flex items-center gap-1.5 cursor-pointer text-base px-4 py-2">
+              This lesson (Navigation 2 A-A)
+            </button>
+            <button className="font-semibold rounded-full border border-[#ECECEC] bg-[#F7F7F7] text-[#030213] hover:bg-[#1515F5] hover:text-white hover:border-[#1515F5] transition-colors flex items-center gap-1.5 cursor-pointer text-base px-4 py-2">
+              Next lesson
+            </button>
+            <button className="font-semibold rounded-full border border-[#ECECEC] bg-white text-e-grey hover:bg-[#F7F7F7] hover:text-foreground transition-colors flex items-center gap-1.5 cursor-pointer text-base px-4 py-2">
+              Cancel
+            </button>
+          </div>
+          <UsedIn items={[
+            "Cancel / Back in multi-step pill flows (e.g. lesson briefing)",
+          ]} />
+          <CodeRef>MessageList.tsx (briefing sub-steps)</CodeRef>
+        </Section>
+
         {/* ===== SUGGESTION PILLS ===== */}
         <Section title="Suggestion Pill" description="Light pill with grey text. Indigo text on hover. Used for all suggested questions.">
           <div className="flex flex-wrap gap-2">

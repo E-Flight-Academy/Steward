@@ -304,7 +304,7 @@ query GetPreviousLesson($userId: Int!, $startDate: String!, $endDate: String!) {
       lessons {
         id
         comments
-        plan { name isAssessment course { name } }
+        plan { id name isAssessment course { id name } }
         status { name }
         records {
           id
@@ -393,7 +393,9 @@ export async function getPreviousLessonBooking(
 export interface StudentLessonSummary {
   bookingId: number;
   date: string;
+  courseId: number | null;
   courseName: string | null;
+  planId: number | null;
   planName: string | null;
   isAssessment: boolean;
   status: string | null;
@@ -418,7 +420,7 @@ export async function getStudentLessonHistory(
       lessons: {
         id: number;
         comments: string | null;
-        plan: { name: string; isAssessment: boolean; course: { name: string } | null } | null;
+        plan: { id: number; name: string; isAssessment: boolean; course: { id: number; name: string } | null } | null;
         status: { name: string } | null;
         records: {
           id: number;
@@ -461,7 +463,9 @@ export async function getStudentLessonHistory(
       return {
         bookingId: b.id,
         date: b.from.slice(0, 10),
+        courseId: lesson.plan?.course?.id || null,
         courseName: lesson.plan?.course?.name || null,
+        planId: lesson.plan?.id || null,
         planName: lesson.plan?.name || null,
         isAssessment: lesson.plan?.isAssessment || false,
         status: lesson.status?.name || null,
@@ -509,14 +513,24 @@ const coursePlansCache = new Map<number, { data: WingsLessonPlanFull[]; cachedAt
 
 /**
  * Fetch all lesson plans (exercises) for a course, sorted by sequence.
- * Cached for 1 hour since course content rarely changes.
+ * L1: in-memory (1 hour), L2: Redis (24 hours), L3: Wings API.
  */
 export async function getCourseLessonPlans(courseId: number): Promise<WingsLessonPlanFull[]> {
+  // L1: in-memory
   const cached = coursePlansCache.get(courseId);
   if (cached && Date.now() - cached.cachedAt < CACHE_TTL_MS) {
     return cached.data;
   }
 
+  // L2: Redis
+  const { getKvCoursePlans, setKvCoursePlans } = await import("@/lib/kv-cache");
+  const redisCached = await getKvCoursePlans(courseId);
+  if (redisCached && redisCached.length > 0) {
+    coursePlansCache.set(courseId, { data: redisCached, cachedAt: Date.now() });
+    return redisCached;
+  }
+
+  // L3: Wings API
   try {
     interface QueryResult {
       lessonPlans: { data: WingsLessonPlanFull[] };
@@ -524,6 +538,7 @@ export async function getCourseLessonPlans(courseId: number): Promise<WingsLesso
     const data = await gql<QueryResult>(COURSE_LESSON_PLANS_QUERY, { courseId });
     const plans = data.lessonPlans.data.sort((a, b) => a.sequence - b.sequence);
     coursePlansCache.set(courseId, { data: plans, cachedAt: Date.now() });
+    await setKvCoursePlans(courseId, plans);
     return plans;
   } catch (err) {
     console.error("Wings: failed to fetch course lesson plans:", err);

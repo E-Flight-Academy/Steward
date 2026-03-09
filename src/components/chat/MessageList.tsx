@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState } from "react";
-import type { Message, FlowOption, FlowStep, CardAction } from "@/types/chat";
+import React from "react";
+import type { Message, FlowOption, FlowStep, CardAction, CardSubFlowState, CardActionSubStep } from "@/types/chat";
 import type { UiLabels } from "@/lib/i18n/labels";
 import type { FaqAdminPhase, FaqAdminAction } from "@/hooks/useFaqAdmin";
 import MessageBubble from "./MessageBubble";
@@ -46,7 +46,12 @@ interface MessageListProps {
   onBookingClick?: (bookingId: number, date: string, time: string, student: string) => void;
   cardActions?: CardAction[];
   onCardAction?: (action: CardAction, context: Record<string, string>) => void;
-  onBriefingRequest?: (action: string, context: Record<string, string>) => void;
+  subFlow?: CardSubFlowState | null;
+  onStartSubFlow?: (action: CardAction, bookingContext: Record<string, string>) => void;
+  onSubFlowOption?: (label: string, contextValue: string) => void;
+  onSubFlowBack?: () => void;
+  onSubFlowCancel?: () => void;
+  getVisibleSubFlowOptions?: () => (CardActionSubStep & { resolvedLabel: string })[];
 }
 
 export default function MessageList({
@@ -84,10 +89,13 @@ export default function MessageList({
   onBookingClick,
   cardActions,
   onCardAction,
-  onBriefingRequest,
+  subFlow,
+  onStartSubFlow,
+  onSubFlowOption,
+  onSubFlowBack,
+  onSubFlowCancel,
+  getVisibleSubFlowOptions,
 }: MessageListProps) {
-  const [briefingStep, setBriefingStep] = useState<"idle" | "lesson" | "lang">("idle");
-  const [briefingLessonChoice, setBriefingLessonChoice] = useState<"current" | "next">("current");
   return (
     <div role="log" aria-live="polite" aria-label="Chat messages" className="space-y-4">
       {messages.map((message, index) => (
@@ -233,8 +241,41 @@ export default function MessageList({
             </div>
           )}
 
-          {flowPhase !== "active" && !isLoading && cardActions && cardActions.length > 0 && onCardAction && (() => {
-            // Only show card actions if the last structured message is a booking-detail
+          {flowPhase !== "active" && !isLoading && (() => {
+            // Active sub-flow: show current step options
+            if (subFlow && onSubFlowOption && getVisibleSubFlowOptions) {
+              const options = getVisibleSubFlowOptions();
+              const pillClass = `font-semibold rounded-full border border-[#ECECEC] bg-[#F7F7F7] text-[#030213] hover:bg-[#1515F5] hover:text-white hover:border-[#1515F5] transition-colors flex items-center gap-1.5 cursor-pointer animate-pop-in ${kiosk ? "text-lg px-5 py-3" : "text-base px-4 py-2"}`;
+              const pillSecondaryClass = `font-light rounded-full border border-[#ECECEC] bg-[#F7F7F7]/50 text-e-grey hover:bg-[#F7F7F7] hover:text-foreground transition-colors flex items-center gap-1.5 cursor-pointer animate-pop-in ${kiosk ? "text-lg px-5 py-3" : "text-base px-4 py-2"}`;
+              if (options.length === 0) return null;
+              return (
+                <div className="max-w-4xl mx-auto w-full pl-11 flex flex-wrap gap-2">
+                  {options.map((opt, i) => (
+                    <button
+                      key={opt.name}
+                      onClick={() => onSubFlowOption(opt.resolvedLabel, opt.contextValue)}
+                      className={pillClass}
+                      style={{ animationDelay: `${i * 100}ms` }}
+                    >
+                      {opt.resolvedLabel}
+                    </button>
+                  ))}
+                  {subFlow.stepIndex > 0 && onSubFlowBack && (
+                    <button onClick={onSubFlowBack} className={pillSecondaryClass} style={{ animationDelay: `${options.length * 100}ms` }}>
+                      Back
+                    </button>
+                  )}
+                  {onSubFlowCancel && (
+                    <button onClick={onSubFlowCancel} className={pillSecondaryClass} style={{ animationDelay: `${(options.length + (subFlow.stepIndex > 0 ? 1 : 0)) * 100}ms` }}>
+                      Cancel
+                    </button>
+                  )}
+                </div>
+              );
+            }
+
+            // Card action pills (only when no sub-flow is active)
+            if (!cardActions || cardActions.length === 0 || !onCardAction) return null;
             const lastStructured = [...messages].reverse().find((m) => m.structured);
             if (!lastStructured?.structured || lastStructured.structured.type !== "booking-detail") return null;
             const bd = lastStructured.structured.data;
@@ -243,83 +284,30 @@ export default function MessageList({
               studentUserId: String(bd.studentUserId || ""),
               bookingId: String(bd.id),
               date: bd.date,
+              currentLessonName: bd.lessons.find((l) => l.planName)?.planName || "lesson",
+              courseId: String(bd.lessons.find((l) => l.courseId)?.courseId || ""),
+              planId: String(bd.lessons.find((l) => l.planId)?.planId || ""),
             };
-            if (bd.previousLesson) {
-              ctx.previousLessonBookingId = String(bd.previousLesson.bookingId);
-              ctx.previousLessonPlan = bd.previousLesson.planName || "lesson";
-              ctx.previousLessonDate = bd.previousLesson.date;
-            }
+            const isPast = bd.date < new Date().toISOString().slice(0, 10);
             const visibleActions = cardActions.filter((a) => {
-              if (a.contextKey === "lesson-summary" && !bd.previousLesson) return false;
-              // Hide briefing button if no lesson plan on booking
               if (a.contextKey === "lesson-briefing" && !bd.lessons.some((l) => l.planName)) return false;
+              // Hide briefing actions for past bookings
+              if (a.contextKey === "lesson-briefing" && isPast) return false;
+              // Hide actions whose labels have unresolved template vars (e.g. missing previousLessonPlan)
+              const resolved = a.label.replace(/\{(\w+)\}/g, (_, key) => ctx[key as string] || "");
+              if (/\(\s*\)|\(\s*from\s*\)/.test(resolved)) return false;
               return true;
             });
-            const pillClass = `font-semibold rounded-full border border-[#ECECEC] bg-[#F7F7F7] text-[#030213] hover:bg-[#1515F5] hover:text-white hover:border-[#1515F5] transition-colors flex items-center gap-1.5 cursor-pointer animate-pop-in ${kiosk ? "text-lg px-5 py-3" : "text-base px-4 py-2"}`;
-
-            // Briefing sub-step: lesson choice
-            if (briefingStep === "lesson") {
-              return (
-                <div className="max-w-4xl mx-auto w-full pl-11 flex flex-wrap gap-2">
-                  <button onClick={() => { setBriefingLessonChoice("current"); setBriefingStep("lang"); }} className={pillClass} style={{ animationDelay: "0ms" }}>
-                    This lesson
-                  </button>
-                  <button onClick={() => { setBriefingLessonChoice("next"); setBriefingStep("lang"); }} className={pillClass} style={{ animationDelay: "100ms" }}>
-                    Next lesson
-                  </button>
-                  <button onClick={() => setBriefingStep("idle")} className="text-sm text-e-grey hover:text-foreground transition-colors cursor-pointer px-2">
-                    Cancel
-                  </button>
-                </div>
-              );
-            }
-
-            // Briefing sub-step: language choice
-            if (briefingStep === "lang") {
-              return (
-                <div className="max-w-4xl mx-auto w-full pl-11 flex flex-wrap gap-2">
-                  <button
-                    onClick={() => { setBriefingStep("idle"); onBriefingRequest?.(`lesson-briefing-${briefingLessonChoice}-en`, ctx); }}
-                    className={pillClass} style={{ animationDelay: "0ms" }}
-                  >
-                    English
-                  </button>
-                  <button
-                    onClick={() => { setBriefingStep("idle"); onBriefingRequest?.(`lesson-briefing-${briefingLessonChoice}-nl`, ctx); }}
-                    className={pillClass} style={{ animationDelay: "100ms" }}
-                  >
-                    Nederlands
-                  </button>
-                  <button onClick={() => setBriefingStep("lesson")} className="text-sm text-e-grey hover:text-foreground transition-colors cursor-pointer px-2">
-                    Back
-                  </button>
-                </div>
-              );
-            }
-
             if (visibleActions.length === 0) return null;
+            const pillClass = `font-semibold rounded-full border border-[#ECECEC] bg-[#F7F7F7] text-[#030213] hover:bg-[#1515F5] hover:text-white hover:border-[#1515F5] transition-colors flex items-center gap-1.5 cursor-pointer animate-pop-in ${kiosk ? "text-lg px-5 py-3" : "text-base px-4 py-2"}`;
             return (
               <div className="max-w-4xl mx-auto w-full pl-11 flex flex-wrap gap-2">
                 {visibleActions.map((action, i) => {
                   const label = action.label.replace(/\{(\w+)\}/g, (_, key) => ctx[key as string] || key);
-                  // Briefing action: start multi-step picker instead of immediate API call
-                  if (action.contextKey === "lesson-briefing") {
-                    return (
-                      <button
-                        key={action.name}
-                        onClick={() => setBriefingStep("lesson")}
-                        className={pillClass}
-                        style={{ animationDelay: `${i * 100}ms` }}
-                      >
-                        {action.icon && <span>{action.icon}</span>}
-                        {label}
-                      </button>
-                    );
-                  }
                   return (
                     <button
                       key={action.name}
-                      onClick={() => onCardAction(action, ctx)}
+                      onClick={() => action.subSteps ? onStartSubFlow?.(action, ctx) : onCardAction(action, ctx)}
                       className={pillClass}
                       style={{ animationDelay: `${i * 100}ms` }}
                     >

@@ -79,6 +79,11 @@ export interface KvWebsiteData {
   cachedAt: number;
 }
 
+export interface KvFaqImage {
+  url: string;
+  caption?: string;
+}
+
 export interface KvFaq {
   notionPageId?: string;
   question: string;
@@ -90,6 +95,9 @@ export interface KvFaq {
   category: string[];
   audience: string[];
   url: string;
+  images?: KvFaqImage[];
+  website?: boolean;
+  sectionSlug?: string;
 }
 
 export interface KvFaqsData {
@@ -468,6 +476,24 @@ export async function setKvStudentLessons(studentUserId: number, data: import("@
     const r = getRedis();
     if (!r) return;
     await r.set(`${WINGS_STUDENT_LESSONS_PREFIX}${studentUserId}`, data, { ex: WINGS_STUDENT_LESSONS_TTL });
+  } catch {
+    // Non-fatal
+  }
+}
+
+// --- Course plans cache ---
+const WINGS_COURSE_PLANS_PREFIX = "wings:course-plans:";
+const WINGS_COURSE_PLANS_TTL = 86400; // 24 hours
+
+export async function getKvCoursePlans(courseId: number): Promise<import("@/lib/wings").WingsLessonPlanFull[] | null> {
+  return kvGet<import("@/lib/wings").WingsLessonPlanFull[]>(`${WINGS_COURSE_PLANS_PREFIX}${courseId}`);
+}
+
+export async function setKvCoursePlans(courseId: number, data: import("@/lib/wings").WingsLessonPlanFull[]): Promise<void> {
+  try {
+    const r = getRedis();
+    if (!r) return;
+    await r.set(`${WINGS_COURSE_PLANS_PREFIX}${courseId}`, data, { ex: WINGS_COURSE_PLANS_TTL });
   } catch {
     // Non-fatal
   }

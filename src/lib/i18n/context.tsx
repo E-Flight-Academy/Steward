@@ -25,7 +25,12 @@ const I18nContext = createContext<I18nContextValue>({
 
 export function I18nProvider({ children }: { children: ReactNode }) {
   const [labels, setLabels] = useState<UiLabels>(DEFAULT_LABELS);
-  const [lang, setLang] = useState("nl");
+  const [lang, setLang] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("steward-lang") || "nl";
+    }
+    return "nl";
+  });
   const [translatedStarters, setTranslatedStarters] = useState<string[]>([]);
 
   const t = useCallback(
@@ -51,11 +56,13 @@ export function I18nProvider({ children }: { children: ReactNode }) {
       setLang("en");
       setLabels(DEFAULT_LABELS);
       setTranslatedStarters([]);
+      localStorage.setItem("steward-lang", "en");
       return;
     }
 
     // Optimistic: update lang immediately for button highlight
     setLang(code);
+    localStorage.setItem("steward-lang", code);
 
     try {
       const res = await fetch(`/api/i18n?lang=${code}`);

@@ -1,5 +1,21 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import type { UiLabels } from "@/lib/i18n/labels";
+
+const FONT_SIZES = ["s", "m", "l", "xl", "xxl"] as const;
+type FontSize = typeof FONT_SIZES[number];
+
+function getFontSize(): FontSize {
+  try {
+    return (localStorage.getItem("steward-fontsize") as FontSize) || "m";
+  } catch {
+    return "m";
+  }
+}
+
+function setFontSize(size: FontSize) {
+  localStorage.setItem("steward-fontsize", size);
+  document.documentElement.setAttribute("data-fontsize", size);
+}
 
 interface ChatHeaderProps {
   client: string | null;
@@ -46,6 +62,19 @@ export default function ChatHeader({
   isAdmin,
   t,
 }: ChatHeaderProps) {
+  const [fontSize, setFontSizeState] = useState<FontSize>("m");
+
+  useEffect(() => {
+    const saved = getFontSize();
+    setFontSizeState(saved);
+    document.documentElement.setAttribute("data-fontsize", saved);
+  }, []);
+
+  const handleFontSize = (size: FontSize) => {
+    setFontSizeState(size);
+    setFontSize(size);
+  };
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
@@ -201,6 +230,24 @@ export default function ChatHeader({
                     <div className="text-sm font-semibold text-[#4A4A4A] dark:text-gray-200">{shopifyUser.displayName || `${shopifyUser.firstName} ${shopifyUser.lastName}`.trim()}</div>
                     <div className="text-xs text-e-grey mt-0.5">{shopifyUser.email}</div>
                     <div className="text-xs text-e-indigo mt-1">{displayRole}</div>
+                  </div>
+                  <div className="px-4 py-2.5 border-b border-[#ECECEC] dark:border-gray-700">
+                    <div className="text-xs text-e-grey mb-1.5">Text size</div>
+                    <div className="flex bg-[#F2F2F2] dark:bg-gray-800 rounded-lg p-0.5 gap-0.5">
+                      {FONT_SIZES.map((size) => (
+                        <button
+                          key={size}
+                          onClick={() => handleFontSize(size)}
+                          className={`flex-1 text-xs font-medium py-1.5 rounded-md transition-all cursor-pointer ${
+                            fontSize === size
+                              ? "bg-white dark:bg-gray-900 text-foreground shadow-sm"
+                              : "text-e-grey hover:text-foreground"
+                          }`}
+                        >
+                          {size.toUpperCase()}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                   <div className="pt-1">
                     <a
