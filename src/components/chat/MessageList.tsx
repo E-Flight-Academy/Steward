@@ -276,12 +276,14 @@ export default function MessageList({
 
             // Card action pills (only when no sub-flow is active)
             if (!cardActions || cardActions.length === 0 || !onCardAction) return null;
-            const lastStructured = [...messages].reverse().find((m) => m.structured);
-            if (!lastStructured?.structured || lastStructured.structured.type !== "booking-detail") return null;
-            const bd = lastStructured.structured.data;
+            // Only show if the very last assistant message IS the booking-detail card
+            const lastAssistant = [...messages].reverse().find((m) => m.role === "assistant");
+            if (!lastAssistant?.structured || lastAssistant.structured.type !== "booking-detail") return null;
+            const bd = lastAssistant.structured.data;
             const ctx: Record<string, string> = {
               studentName: bd.student,
               studentUserId: String(bd.studentUserId || ""),
+              studentCustomerId: String(bd.studentCustomerId || ""),
               bookingId: String(bd.id),
               date: bd.date,
               currentLessonName: bd.lessons.find((l) => l.planName)?.planName || "lesson",

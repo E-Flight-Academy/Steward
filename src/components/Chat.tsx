@@ -599,6 +599,7 @@ export default function Chat() {
       const params: Record<string, unknown> = {
         action: action.contextKey,
         studentUserId: context.studentUserId ? Number(context.studentUserId) : undefined,
+        studentCustomerId: context.studentCustomerId ? Number(context.studentCustomerId) : undefined,
         studentName: context.studentName,
         bookingId: context.bookingId ? Number(context.bookingId) : undefined,
         previousLessonBookingId: context.previousLessonBookingId ? Number(context.previousLessonBookingId) : undefined,

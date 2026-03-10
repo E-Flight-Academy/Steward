@@ -16,6 +16,7 @@ const requestSchema = z.object({
   courseId: z.number().int().positive().optional(),
   previousLessonBookingId: z.number().int().positive().optional(),
   studentUserId: z.number().int().positive().optional(),
+  studentCustomerId: z.number().int().positive().optional(),
   studentName: z.string().max(200).optional(),
   endPrompt: z.string().max(5000).optional(),
   userEmail: z.string().email().max(200).optional(),
@@ -176,8 +177,10 @@ export async function POST(request: NextRequest) {
 
       const date = raw.from.slice(0, 10);
 
-      // Fetch documents for student/instructor and aircraft status in parallel
-      const studentUser = raw.user || raw.customer;
+      // Resolve the student: prefer user, but if user is the instructor, fall back to customer
+      const studentUser = (raw.user && raw.instructor && raw.user.id === raw.instructor.id)
+        ? raw.customer
+        : raw.user || raw.customer;
       const docUserIds: { id: number; name: string }[] = [];
       if (studentUser?.id) docUserIds.push({ id: studentUser.id, name: studentUser.name });
       if (raw.instructor?.id) docUserIds.push({ id: raw.instructor.id, name: raw.instructor.name });
@@ -188,13 +191,22 @@ export async function POST(request: NextRequest) {
       const firstLesson = raw.lessons[0];
       const hasCourse = firstLesson?.plan?.id && firstLesson.plan.course?.id;
 
-      const [docResults, acStatus, coursePlansForPrev, studentHistory] = await Promise.all([
+      const [docResults, acStatus, coursePlansForPrev, studentHistoryInitial] = await Promise.all([
         Promise.all(docUserIds.map((u) => getUserDocuments(u.id))),
         callSign ? getAircraftStatus(callSign) : Promise.resolve(null),
         hasCourse ? getCourseLessonPlans(firstLesson.plan!.course!.id) : Promise.resolve([]),
-        // If no lesson plan linked, fetch student history to infer course progress
-        !hasCourse && studentUser?.id ? getStudentLessonHistory(studentUser.id, 10) : Promise.resolve([]),
+        // Fetch student history: needed both for inferring course when no plan, and for resolving previous lesson booking
+        studentUser?.id ? getStudentLessonHistory(studentUser.id, 30) : Promise.resolve([]),
       ]);
+
+      // Fallback: if student history is empty, try the other ID (user vs customer)
+      let studentHistory = studentHistoryInitial;
+      if (studentHistory.length === 0) {
+        const altId = studentUser?.id === raw.user?.id ? raw.customer?.id : raw.user?.id;
+        if (altId && altId !== studentUser?.id) {
+          studentHistory = await getStudentLessonHistory(altId, 30);
+        }
+      }
 
       let previousLesson: PreviousLesson | null = null;
       // Extra fields to enrich the booking when lesson plan is missing
@@ -208,13 +220,21 @@ export async function POST(request: NextRequest) {
         const currentIdx = coursePlansForPrev.findIndex((p) => p.id === firstLesson.plan!.id);
         if (currentIdx > 0) {
           const prevPlan = coursePlansForPrev[currentIdx - 1];
-          previousLesson = {
-            bookingId: 0,
-            date: "",
-            planName: prevPlan.name,
-            isAssessment: prevPlan.isAssessment,
-            status: null,
-          };
+          // Look up the actual booking for this plan from student history
+          const prevBooking = studentHistory.find((h) => h.planId === prevPlan.id);
+          if (prevBooking) {
+            previousLesson = {
+              bookingId: prevBooking.bookingId,
+              date: prevBooking.date,
+              planName: prevPlan.name,
+              isAssessment: prevPlan.isAssessment,
+              status: prevBooking.status,
+              records: [],
+            };
+          } else {
+            // Plan exists in course but student hasn't done it yet — show as info only
+            previousLesson = null;
+          }
         }
       } else if (studentHistory.length > 0) {
         // No lesson plan on booking — infer from student's most recent lesson with a course
@@ -237,9 +257,31 @@ export async function POST(request: NextRequest) {
               planName: lastWithCourse.planName || "—",
               isAssessment: lastWithCourse.isAssessment,
               status: lastWithCourse.status,
+              records: [],
             };
           }
         }
+      }
+
+      // Fetch previous lesson records (scores + hot items) if we found a previous booking
+      if (previousLesson && previousLesson.bookingId > 0) {
+        try {
+          const prevRaw = await getBookingDetail(previousLesson.bookingId);
+          if (prevRaw?.lessons?.length) {
+            const allRecords: LessonRecord[] = [];
+            for (const l of prevRaw.lessons) {
+              for (const r of l.records || []) {
+                allRecords.push({
+                  objectiveSummary: r.objective?.summary || "—",
+                  categoryName: r.objective?.category?.name || "—",
+                  score: r.score,
+                  comments: r.comments || null,
+                });
+              }
+            }
+            previousLesson.records = allRecords;
+          }
+        } catch { /* non-critical — show previous lesson without records */ }
       }
 
       const now = new Date();
@@ -308,7 +350,8 @@ export async function POST(request: NextRequest) {
         type: raw.type.name,
         status: raw.status.name,
         student: studentUser?.name || raw.eventTitle || "—",
-        studentUserId: studentUser?.id || null,
+        studentUserId: raw.user?.id || null,
+        studentCustomerId: raw.customer?.id || null,
         studentEmail: studentUser?.email || null,
         instructor: raw.instructor?.name || "—",
         aircraft: raw.aircraft?.callSign || "—",
@@ -500,20 +543,27 @@ export async function POST(request: NextRequest) {
       if (!capabilities.includes("instructor-schedule")) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
       }
-      const { studentUserId: suid, studentName } = parsed.data;
-      if (!suid) {
-        return NextResponse.json({ error: "studentUserId is required" }, { status: 400 });
+      const { studentUserId: suid, studentCustomerId: scid, studentName } = parsed.data;
+      if (!suid && !scid) {
+        return NextResponse.json({ error: "studentUserId or studentCustomerId is required" }, { status: 400 });
       }
 
       // Try Redis cache first, otherwise fetch all lessons (3 year window)
-      // Re-fetch if cached data has stale courseName (was booking.type.name, now lesson.plan.course.name)
-      let lessons = await getKvStudentLessons(suid);
+      // Try userId first, fall back to customerId if no results
+      const lookupId = suid || scid!;
+      let lessons = await getKvStudentLessons(lookupId);
       const staleCache = lessons && lessons.length > 0 && (
         !lessons[0].courseName || lessons[0].courseName === "Lesson"
       );
       if (!lessons || staleCache) {
-        lessons = await getStudentLessonHistory(suid);
-        await setKvStudentLessons(suid, lessons);
+        lessons = await getStudentLessonHistory(lookupId);
+        // If userId returned nothing and we have a different customerId, try that
+        if (lessons.length === 0 && scid && suid && scid !== suid) {
+          lessons = await getStudentLessonHistory(scid);
+          if (lessons.length > 0) await setKvStudentLessons(scid, lessons);
+        } else {
+          await setKvStudentLessons(lookupId, lessons);
+        }
       }
 
       // Group by course (booking type, e.g. "Night Rating", "PPL"), sorted newest first within each course

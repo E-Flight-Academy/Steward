@@ -87,6 +87,7 @@ export interface PreviousLesson {
   planName: string;
   isAssessment: boolean;
   status: string | null;
+  records: LessonRecord[];
 }
 
 export interface BookingDetail {
@@ -98,6 +99,7 @@ export interface BookingDetail {
   status: string;
   student: string;
   studentUserId: number | null;
+  studentCustomerId: number | null;
   studentEmail: string | null;
   instructor: string;
   aircraft: string;

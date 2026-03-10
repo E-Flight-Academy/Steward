@@ -57,7 +57,12 @@ export default function StudentLessonsMessage({ data, summary, onBookingClick }:
       {/* Header */}
       <div className="px-4 pt-3 pb-2">
         <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-foreground">{data.studentName}</h3>
+          <div>
+            <h3 className="text-sm font-semibold text-foreground">{data.studentName}</h3>
+            {data.courses.length === 1 && (
+              <p className="text-xs text-[#828282]">{data.courses[0].courseName}</p>
+            )}
+          </div>
           <span className="text-xs text-[#828282]">{data.totalLessons} lessons</span>
         </div>
       </div>
