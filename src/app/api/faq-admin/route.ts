@@ -3,6 +3,7 @@ import { Client } from "@notionhq/client";
 import { getSession } from "@/lib/shopify-auth";
 import { faqAdminSchema } from "@/lib/api-schemas";
 import { syncFaqs } from "@/lib/faq";
+import { getRoleAccess } from "@/lib/role-access";
 
 const ADMIN_EMAILS = ["matthijs@eflight.nl", "matthijscollard@gmail.com", "wesley@eflight.nl", "paulien@eflight.nl", "milos@eflight.nl"];
 
@@ -20,7 +21,14 @@ export const NOTION_FAQ_PROPERTIES = [
 // Forbidden properties that no longer exist in the Notion FAQ database
 export const NOTION_FAQ_FORBIDDEN_PROPERTIES = ["Audience"] as const;
 
-export function buildAddProperties(data: { question: string; questionNl: string; questionDe: string; answer: string; answerNl: string; answerDe: string; category: string[]; url: string }) {
+interface FaqPropertyData {
+  question: string; questionNl: string; questionDe: string;
+  answer: string; answerNl: string; answerDe: string;
+  category: string[]; url: string;
+  roleRelation?: { id: string }[];
+}
+
+export function buildAddProperties(data: FaqPropertyData) {
   return {
     "Question (EN)": { title: [{ text: { content: data.question } }] },
     "Question (NL)": richText(data.questionNl),
@@ -31,10 +39,11 @@ export function buildAddProperties(data: { question: string; questionNl: string;
     "Live": { checkbox: true },
     ...(data.category && data.category.length > 0 ? { "Category": { multi_select: data.category.map((c: string) => ({ name: c })) } } : {}),
     ...(data.url ? { "Link": { url: data.url } } : {}),
+    ...(data.roleRelation && data.roleRelation.length > 0 ? { "Role": { relation: data.roleRelation } } : {}),
   };
 }
 
-export function buildEditProperties(data: { question: string; questionNl: string; questionDe: string; answer: string; answerNl: string; answerDe: string; category: string[]; url: string }) {
+export function buildEditProperties(data: FaqPropertyData) {
   return {
     "Question (EN)": { title: [{ text: { content: data.question } }] },
     "Question (NL)": richText(data.questionNl),
@@ -44,7 +53,18 @@ export function buildEditProperties(data: { question: string; questionNl: string
     "Answer (DE)": richText(data.answerDe),
     "Category": { multi_select: (data.category && data.category.length > 0) ? data.category.map((c: string) => ({ name: c })) : [] },
     "Link": { url: data.url || null },
+    "Role": { relation: data.roleRelation || [] },
   };
+}
+
+/** Resolve audience role names to Notion Role Access page IDs */
+async function resolveRoleRelation(audienceNames: string[]): Promise<{ id: string }[]> {
+  if (!audienceNames || audienceNames.length === 0) return [];
+  const mappings = await getRoleAccess();
+  const normalized = audienceNames.map((a) => a.toLowerCase());
+  return mappings
+    .filter((m) => normalized.includes(m.role.toLowerCase()))
+    .map((m) => ({ id: m.notionPageId }));
 }
 
 export async function POST(request: Request) {
@@ -69,10 +89,13 @@ export async function POST(request: Request) {
   const data = parsed.data;
 
   try {
+    // Resolve audience names to Role relation page IDs
+    const roleRelation = await resolveRoleRelation(data.audience || []);
+
     if (data.action === "add") {
       const page = await notion.pages.create({
         parent: { database_id: databaseId },
-        properties: buildAddProperties(data),
+        properties: buildAddProperties({ ...data, roleRelation }),
       });
 
       await syncFaqs();
@@ -90,7 +113,7 @@ export async function POST(request: Request) {
     if (data.action === "edit") {
       await notion.pages.update({
         page_id: data.notionPageId,
-        properties: buildEditProperties(data),
+        properties: buildEditProperties({ ...data, roleRelation }),
       });
 
       await syncFaqs();

@@ -74,6 +74,16 @@ describe("faq-admin Notion properties", () => {
       const props = buildAddProperties({ ...sampleData, url: "" });
       expect(props).not.toHaveProperty("Link");
     });
+
+    it("includes Role relation when provided", () => {
+      const props = buildAddProperties({ ...sampleData, roleRelation: [{ id: "page-1" }, { id: "page-2" }] });
+      expect(props["Role"]).toEqual({ relation: [{ id: "page-1" }, { id: "page-2" }] });
+    });
+
+    it("omits Role when no roleRelation", () => {
+      const props = buildAddProperties(sampleData);
+      expect(props).not.toHaveProperty("Role");
+    });
   });
 
   describe("buildEditProperties", () => {
@@ -95,6 +105,16 @@ describe("faq-admin Notion properties", () => {
     it("sets Link to null when empty", () => {
       const props = buildEditProperties({ ...sampleData, url: "" });
       expect(props["Link"]).toEqual({ url: null });
+    });
+
+    it("sets Role relation when provided", () => {
+      const props = buildEditProperties({ ...sampleData, roleRelation: [{ id: "page-1" }] });
+      expect(props["Role"]).toEqual({ relation: [{ id: "page-1" }] });
+    });
+
+    it("clears Role when no roleRelation", () => {
+      const props = buildEditProperties(sampleData);
+      expect(props["Role"]).toEqual({ relation: [] });
     });
   });
 });
