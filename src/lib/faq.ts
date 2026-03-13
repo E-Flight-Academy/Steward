@@ -108,8 +108,8 @@ async function extractPageImages(
       }
     }
 
-    // 2. Images from page content blocks (only if no property images found)
-    if (images.length === 0) {
+    // 2. Images from page content blocks (only if no property images found AND mirroring enabled)
+    if (images.length === 0 && mirrorToS3) {
       const blocks = await notion.blocks.children.list({ block_id: pageId, page_size: 100 });
       for (const block of blocks.results) {
         if (!("type" in block) || block.type !== "image") continue;

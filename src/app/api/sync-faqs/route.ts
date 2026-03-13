@@ -24,9 +24,12 @@ async function handleSync(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const skipImages = request.nextUrl.searchParams.get("skipImages") === "true";
+
   try {
+    // Phase 1: fast sync (text only, skip page block image fetching)
     const [faqs, starters] = await Promise.all([
-      syncFaqs(),
+      syncFaqs({ skipImages: skipImages }),
       syncStarters(),
     ]);
 
@@ -38,6 +41,14 @@ async function handleSync(request: NextRequest) {
       }
     } catch {
       // Non-fatal
+    }
+
+    // Phase 2: if we skipped images, trigger an async image sync
+    // (runs after response is sent — fire and forget)
+    if (skipImages) {
+      syncFaqs({ skipImages: false }).catch((err) => {
+        console.error("Background image sync failed:", err);
+      });
     }
 
     return NextResponse.json({
