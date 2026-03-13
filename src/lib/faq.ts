@@ -58,39 +58,79 @@ export function getRichTextMd(props: Record<string, unknown>, key: string): stri
   return md;
 }
 
-/** Extract images from Notion page blocks and optionally mirror Notion-hosted to Scaleway */
+/** Mirror a single Notion-hosted file URL to S3, returning the permanent URL */
+async function mirrorNotionFile(
+  sourceUrl: string,
+  s3Key: string,
+  mirrorToS3: boolean,
+): Promise<string | null> {
+  if (mirrorToS3 && process.env.SCW_ACCESS_KEY) {
+    return await mirrorImage(sourceUrl, s3Key);
+  }
+  return null; // Skip — Notion URLs expire in ~1hr
+}
+
+/** Extract images from the "Image" files property on a Notion page */
+function extractPropertyImages(
+  props: Record<string, unknown>,
+): { name: string; url: string; type: "file" | "external" }[] {
+  const imgProp = props["Image"] as { type: string; files?: { name: string; type: string; file?: { url: string }; external?: { url: string } }[] } | undefined;
+  if (imgProp?.type !== "files" || !imgProp.files) return [];
+  return imgProp.files
+    .map((f) => ({
+      name: f.name,
+      url: (f.type === "file" ? f.file?.url : f.external?.url) || "",
+      type: f.type as "file" | "external",
+    }))
+    .filter((f) => f.url);
+}
+
+/** Extract images from Notion page — first from Image property, then from page blocks */
 async function extractPageImages(
   notion: InstanceType<typeof Client>,
   pageId: string,
   mirrorToS3 = true,
+  propertyImages: { name: string; url: string; type: "file" | "external" }[] = [],
 ): Promise<KvFaqImage[]> {
   try {
-    const blocks = await notion.blocks.children.list({ block_id: pageId, page_size: 100 });
     const images: KvFaqImage[] = [];
 
-    for (const block of blocks.results) {
-      if (!("type" in block) || block.type !== "image") continue;
-      const imgBlock = block as { id: string; type: "image"; image: { type: string; file?: { url: string }; external?: { url: string }; caption?: { plain_text: string }[] } };
-      const sourceUrl = imgBlock.image.type === "file"
-        ? imgBlock.image.file?.url
-        : imgBlock.image.external?.url;
-      if (!sourceUrl) continue;
-
-      const caption = imgBlock.image.caption?.map((c) => c.plain_text).join("") || undefined;
-      // For Notion-hosted files (temporary URLs), mirror to Scaleway if S3 configured and mirroring enabled
-      // For external URLs, keep as-is (they're already permanent)
-      if (imgBlock.image.type === "file") {
-        if (mirrorToS3 && process.env.SCW_ACCESS_KEY) {
-          const ext = sourceUrl.match(/\.(png|jpe?g|gif|webp|svg)/i)?.[1] || "png";
-          const key = `faq-images/${pageId}/${block.id}.${ext}`;
-          const permanentUrl = await mirrorImage(sourceUrl, key);
-          if (permanentUrl) images.push({ url: permanentUrl, caption });
-        }
-        // Skip Notion-hosted images if no S3 or mirroring disabled — their URLs expire in ~1hr
+    // 1. Images from the "Image" files property (no extra API call needed)
+    for (let idx = 0; idx < propertyImages.length; idx++) {
+      const img = propertyImages[idx];
+      if (img.type === "file") {
+        const ext = img.url.match(/\.(png|jpe?g|gif|webp|svg)/i)?.[1] || "jpg";
+        const key = `faq-images/${pageId}/prop-${idx}.${ext}`;
+        const permanentUrl = await mirrorNotionFile(img.url, key, mirrorToS3);
+        if (permanentUrl) images.push({ url: permanentUrl });
       } else {
-        images.push({ url: sourceUrl, caption });
+        images.push({ url: img.url });
       }
     }
+
+    // 2. Images from page content blocks (only if no property images found)
+    if (images.length === 0) {
+      const blocks = await notion.blocks.children.list({ block_id: pageId, page_size: 100 });
+      for (const block of blocks.results) {
+        if (!("type" in block) || block.type !== "image") continue;
+        const imgBlock = block as { id: string; type: "image"; image: { type: string; file?: { url: string }; external?: { url: string }; caption?: { plain_text: string }[] } };
+        const sourceUrl = imgBlock.image.type === "file"
+          ? imgBlock.image.file?.url
+          : imgBlock.image.external?.url;
+        if (!sourceUrl) continue;
+
+        const caption = imgBlock.image.caption?.map((c) => c.plain_text).join("") || undefined;
+        if (imgBlock.image.type === "file") {
+          const ext = sourceUrl.match(/\.(png|jpe?g|gif|webp|svg)/i)?.[1] || "png";
+          const key = `faq-images/${pageId}/${block.id}.${ext}`;
+          const permanentUrl = await mirrorNotionFile(sourceUrl, key, mirrorToS3);
+          if (permanentUrl) images.push({ url: permanentUrl, caption });
+        } else {
+          images.push({ url: sourceUrl, caption });
+        }
+      }
+    }
+
     return images;
   } catch (err) {
     logger.warn("Failed to extract images for page", { pageId, error: String(err) });
@@ -183,13 +223,17 @@ export async function fetchFaqsFromNotion(skipImages = false): Promise<KvFaq[]> 
       ? slugProp.rollup.array[0].rich_text.map((t) => t.plain_text).join("")
       : "";
 
+    // Image property (files) — extract URLs for later mirroring
+    const propImages = extractPropertyImages(props);
+
     // Include if at least one Q+A pair exists
     if (question && (answer || answerNl || answerDe)) {
       faqs.push({
         notionPageId: page.id, question, questionNl, questionDe,
         answer, answerNl, answerDe, category, audience, url,
         website, sectionSlug,
-      });
+        _propImages: propImages,
+      } as KvFaq & { _propImages: typeof propImages });
     }
   }
 
@@ -199,21 +243,26 @@ export async function fetchFaqsFromNotion(skipImages = false): Promise<KvFaq[]> 
   }
 
   // Fetch images in batches of 3 (Notion rate limit: 3 req/sec)
-  // External images are always included; Notion-hosted mirroring only when !skipImages
+  // First uses Image property (no API call needed), falls back to page blocks
   {
     let imageCount = 0;
     for (let i = 0; i < faqs.length; i += 3) {
       const batch = faqs.slice(i, i + 3);
       const results = await Promise.all(
-        batch.map((faq) => extractPageImages(notion, faq.notionPageId!, !skipImages))
+        batch.map((faq) => {
+          const propImages = (faq as KvFaq & { _propImages?: { name: string; url: string; type: "file" | "external" }[] })._propImages || [];
+          return extractPageImages(notion, faq.notionPageId!, !skipImages, propImages);
+        })
       );
       for (let j = 0; j < batch.length; j++) {
         if (results[j].length > 0) {
           batch[j].images = results[j];
           imageCount += results[j].length;
         }
+        // Clean up temp field
+        delete (batch[j] as KvFaq & { _propImages?: unknown })._propImages;
       }
-      // Rate limit pause between batches
+      // Rate limit pause between batches (only needed when fetching page blocks)
       if (i + 3 < faqs.length) await new Promise((r) => setTimeout(r, 1100));
     }
     if (imageCount > 0) logger.info(`FAQ sync: mirrored ${imageCount} images`);

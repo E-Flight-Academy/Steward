@@ -33,7 +33,7 @@ export async function GET(request: NextRequest) {
         const userData = await getUserData(userEmailOverride);
         wingsUserId = userData.wingsUserId;
         email = userEmailOverride;
-        displayName = userEmailOverride.split("@")[0];
+        displayName = userData.name || userEmailOverride.split("@")[0];
         // If role override is also set, use that instead of Airtable roles
         roles = roleOverride ? roleOverride.split(",").map(r => r.trim()).filter(Boolean) : userData.roles;
       } else {
@@ -45,7 +45,7 @@ export async function GET(request: NextRequest) {
       console.log(`[DEBUG] Override: email=${email}, roles=[${roles.join(", ")}], caps=[${capabilities.join(", ")}], wingsUserId=${wingsUserId}`);
       return NextResponse.json({
         authenticated: true,
-        customer: { email, firstName: "Dev", lastName: "User", displayName },
+        customer: { email, firstName: displayName.split(" ")[0], lastName: displayName.split(" ").slice(1).join(" "), displayName },
         roles,
         capabilities,
         wingsUserId,

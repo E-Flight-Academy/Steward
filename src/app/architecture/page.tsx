@@ -637,11 +637,11 @@ function AuthRoles() {
 }
 
 // ─── Navigation bar ─────────────────────────────────────────────────
-function DocsNav({ active }: { active: "architecture" | "patterns" | "design" }) {
+function DocsNav({ active }: { active: "architecture" | "patterns" | "discovery" }) {
   const items = [
     { href: "/architecture", label: "Architecture", id: "architecture" as const },
     { href: "/patterns", label: "Patterns", id: "patterns" as const },
-    { href: "/design", label: "Design", id: "design" as const },
+    { href: "/discovery", label: "Discovery", id: "discovery" as const },
   ];
   return (
     <div className="flex items-center gap-3">
@@ -668,6 +668,7 @@ export default function ArchitecturePage() {
   const [authState, setAuthState] = useState<"loading" | "denied" | "allowed">("loading");
 
   useEffect(() => {
+    if (process.env.NODE_ENV === "development") { setAuthState("allowed"); return; }
     fetch("/api/auth/shopify/session")
       .then((r) => r.json())
       .then((data) => {

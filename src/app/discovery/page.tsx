@@ -7,21 +7,21 @@ const ADMIN_EMAILS = ["matthijs@eflight.nl", "matthijscollard@gmail.com", "wesle
 const ALLOWED_ROLES = ["operations", "instructor"];
 
 // ─── Nav ────────────────────────────────────────────────────────────
-function DocsNav({ active }: { active: "architecture" | "patterns" | "design" }) {
+function DocsNav({ active }: { active: "architecture" | "patterns" | "discovery" }) {
   const items = [
     { href: "/architecture", label: "Architecture", id: "architecture" as const },
     { href: "/patterns", label: "Patterns", id: "patterns" as const },
-    { href: "/design", label: "Design", id: "design" as const },
+    { href: "/discovery", label: "Discovery", id: "discovery" as const },
   ];
   return (
     <div className="flex items-center gap-3">
       <Link href="/" className="text-sm text-e-grey hover:text-e-indigo transition-colors no-underline">← Steward</Link>
-      <div className="flex gap-1 bg-[#1e2435] rounded-lg p-0.5">
+      <div className="flex gap-1 bg-[#F2F2F2] rounded-lg p-0.5">
         {items.map((item) => (
           <Link
             key={item.id}
             href={item.href}
-            className={`text-sm font-medium px-4 py-1.5 rounded-md transition-colors no-underline ${active === item.id ? "bg-[#161922] text-[#f1f5f9] shadow-sm" : "text-[#64748b] hover:text-[#f1f5f9]"}`}
+            className={`text-sm font-medium px-4 py-1.5 rounded-md transition-colors no-underline ${active === item.id ? "bg-white text-foreground shadow-sm" : "text-[#828282] hover:text-foreground"}`}
           >
             {item.label}
           </Link>
@@ -83,21 +83,21 @@ const features: Feature[] = [
     },
     opportunities: [
       {
-        id: 1, title: "Remarks history last 5–10 lessons",
-        description: "Instructor has to open each gradesheet separately to get a picture of the student",
+        id: 1, title: "Last 5 lessons with comments per instructor",
+        description: "Instructor has to open each gradesheet separately to get a picture of the student — they want only the last 5 lessons with the actual comments and which instructor flew each lesson",
         solutions: [
-          { title: "Airtable: last N gradesheets per student", effort: "M", impact: "H", source: "Airtable REST API", note: "Including date, grading per category, instructor name" },
-          { title: "Summary table: lesson × category × grading", effort: "M", impact: "H", source: "UI component", note: "Horizontal: lessons | Vertical: skills" },
-          { title: "Show instructor name per lesson", effort: "S", impact: "M", source: "Airtable relation", note: "Relevant when student flies with multiple instructors" }
+          { title: "Airtable: last 5 gradesheets per student", effort: "M", impact: "H", source: "Airtable REST API", note: "Date, instructor name, lesson type, and full comments per lesson" },
+          { title: "Show actual comments per lesson (not just grades)", effort: "S", impact: "H", source: "Airtable REST API", note: "Interview insight: instructors want to read the real remarks, not just scores" },
+          { title: "Show instructor name per lesson", effort: "S", impact: "H", source: "Airtable relation", note: "Interview: critical when student flies with multiple instructors — they want to know who wrote what" }
         ]
       },
       {
-        id: 2, title: "Finalize next lesson",
-        description: "Instructor has to determine the focus of the next lesson themselves",
+        id: 2, title: "AI summary with verifiability",
+        description: "Instructors want a summary of what to work on, but are afraid of missing information — they need to be able to compare the summary against the actual comments",
         solutions: [
-          { title: "AI analysis: what needs improvement?", effort: "S", impact: "H", source: "Gemini + grading history", note: "Lowest scores over recent lessons = priority" },
-          { title: "Generate lesson plan summary", effort: "S", impact: "H", source: "Gemini + syllabus", note: "What we'll do, why, what is the goal" },
-          { title: "Instructor can edit the summary", effort: "M", impact: "M", source: "UI text editor", note: "Editable output for personal notes" }
+          { title: "AI summary: focus points for next lesson", effort: "S", impact: "H", source: "Gemini + comments history", note: "Main output: what to work on with this student today and why" },
+          { title: "Side-by-side: summary vs. original comments", effort: "M", impact: "H", source: "UI component", note: "Interview insight: instructors don't trust AI blindly — they want to verify the summary is complete" },
+          { title: "Expandable comments per lesson below the summary", effort: "S", impact: "H", source: "UI component", note: "Collapsed by default, expandable to check — builds trust over time" }
         ]
       },
       {
@@ -118,17 +118,59 @@ const features: Feature[] = [
       }
     ],
     mvp: [
-      "Airtable: fetch last 5–10 gradesheets per student",
-      "Summary table: date | instructor | grading per category",
-      "AI summary: what we'll do today (planned lesson type from Airtable) + why (based on grading history)",
-      "Individual remarks grouped by theme",
+      "Airtable: fetch last 5 gradesheets per student with full comments",
+      "Per lesson: date, instructor name, lesson type, comments",
+      "AI summary: what to work on today and why (based on comments history)",
+      "Expandable original comments below summary for verification",
       "Aircraft: manual remarks from Airtable"
     ],
-    outOfScope: "Editable lesson planner UI and tech log integration — first validate that the summary is accurate and usable.",
+    outOfScope: "Editable lesson planner UI and tech log integration — first validate that the summary is accurate and trusted by instructors.",
     hypotheses: [
-      { h: "Instructors currently open multiple gradesheets per preparation — this takes noticeable time", test: "Ask: how many gradesheets do you open on average before a lesson? How long does that take?" },
-      { h: "AI analysis of lowest scores gives an accurate priority for the next lesson", test: "Show AI output to instructor — does this match their own assessment?" },
+      { h: "5 lessons is the right window — instructors don't need more context", test: "Validated in interview (Peter): 5 lessons is what they want" },
+      { h: "Instructors don't trust AI summaries unless they can verify against the original comments", test: "Validated in interview (Peter): they want to compare summary with actual remarks" },
+      { h: "Knowing which instructor wrote each comment is essential for interpreting the remarks", test: "Validated in interview (Peter): instructor name per lesson is a must-have" },
       { h: "The summary is immediately usable without editing", test: "Have 2 instructors use the output in a real lesson — how much do they modify it?" }
+    ]
+  },
+  {
+    id: "pre-lesson-checklist",
+    label: "Pre-lesson Checklist", role: "instructeur",
+    votes: null, priority: 1, status: "Backlog", statusColor: "#f59e0b",
+    userRequest: true,
+    outcome: {
+      title: "Instructor can see the checklist items for the upcoming lesson before creating it in Wings — so they know what to prepare and assess without having to open Wings first",
+      metric: "No surprise checklist items during the lesson • Better preparation • Less time in Wings before the briefing"
+    },
+    opportunities: [
+      {
+        id: 1, title: "Checklist items not visible until lesson is created",
+        description: "In Wings, checklist items for a lesson type only appear after the lesson booking is created — instructors want to see them beforehand to prepare",
+        solutions: [
+          { title: "Fetch checklist items from Wings by lesson type", effort: "S", impact: "H", source: "Wings API", note: "Interview insight (Peter): checklist items exist in Wings per lesson type — fetch them before the lesson is created" },
+          { title: "Show checklist in Lesson Briefing component", effort: "S", impact: "H", source: "UI component", note: "Display checklist items alongside the lesson summary — natural place for pre-lesson prep" },
+          { title: "Link checklist to syllabus requirements", effort: "M", impact: "M", source: "Wings API + course plan", note: "Show which syllabus exercise each checklist item relates to" }
+        ]
+      },
+      {
+        id: 2, title: "Checklist varies per lesson type",
+        description: "Different lesson types (solo, dual, nav, night) have different checklists — the right one must be shown",
+        solutions: [
+          { title: "Auto-detect lesson type from Wings booking", effort: "S", impact: "H", source: "Wings API", note: "Next scheduled booking determines which checklist to show" },
+          { title: "Manual lesson type selection as fallback", effort: "S", impact: "M", source: "UI dropdown", note: "If no booking exists yet, instructor picks the lesson type" }
+        ]
+      }
+    ],
+    mvp: [
+      "Fetch checklist items from Wings API by lesson type",
+      "Auto-detect lesson type from next scheduled booking",
+      "Show checklist in Lesson Briefing before lesson creation",
+      "Manual lesson type picker as fallback"
+    ],
+    outOfScope: "Editable checklists or custom checklist items — Wings is the source of truth. Pre-filling checklist scores — that stays in Wings.",
+    hypotheses: [
+      { h: "Instructors regularly encounter unexpected checklist items because they haven't seen them before the lesson", test: "Validated in interview (Peter): currently only visible after creating the lesson in Wings" },
+      { h: "Showing the checklist beforehand improves lesson preparation quality", test: "Have 2 instructors use pre-lesson checklist for a week — do they feel better prepared?" },
+      { h: "The Wings API exposes checklist items per lesson type without creating a booking", test: "Test Wings API: can we fetch checklist definitions by lesson/exercise type?" }
     ]
   },
   {
@@ -563,7 +605,7 @@ const features: Feature[] = [
   {
     id: "license-medical-check",
     label: "License & Medical Check", role: "instructeur",
-    votes: 2, priority: 2, status: "Backlog", statusColor: "#f59e0b",
+    votes: 2, priority: 1, status: "Priority", statusColor: "#22c55e",
     outcome: {
       title: "Instructor can instantly see whether a student's license and medical are valid — without opening Airtable themselves",
       metric: "No flights with expired documents • Compliance ensured • Seconds instead of minutes to verify"
@@ -1090,48 +1132,379 @@ const features: Feature[] = [
       { h: "Notion image URLs expire or become inaccessible — this needs testing before production use", test: "Upload a test image to Notion, fetch URL via API, check if it stays accessible after 24h / 7 days" },
       { h: "Content team will actually add images if it is just drag and drop in Notion", test: "Show 1 non-technical team member how to add an image — do they do it without help?" }
     ]
+  },
+  {
+    id: "mcp-data-layer",
+    label: "MCP Data Layer", role: "systeem",
+    votes: null, priority: 2, status: "Backlog", statusColor: "#f59e0b",
+    outcome: {
+      title: "All E-Flight data sources (Wings, Notion, Airtable, Shopify, Drive) are accessible via a single MCP server — so Steward and future apps share one data layer instead of each re-implementing API integrations",
+      metric: "One integration per data source • New apps connect in hours, not days • Consistent caching and auth across all consumers"
+    },
+    opportunities: [
+      {
+        id: 1, title: "Duplicated API integrations across apps",
+        description: "Every new app that needs Wings or Airtable data has to re-implement the same API calls, auth, caching, and error handling",
+        solutions: [
+          { title: "MCP server with tools per data domain", effort: "H", impact: "H", source: "MCP SDK (TypeScript)", note: "Tools like getInstructorSchedule, getStudentProfile, getFaqs — each wraps an existing lib function" },
+          { title: "Extract existing Steward lib/ functions into shared packages", effort: "M", impact: "H", source: "Steward codebase", note: "wings.ts, faq.ts, role-access.ts already exist — wrap them as MCP tools" },
+          { title: "Standalone MCP server repo (separate from Steward)", effort: "M", impact: "H", source: "New repo", note: "Clean separation: MCP server = data layer, Steward = chat UI + AI" }
+        ]
+      },
+      {
+        id: 2, title: "Steward consumes its own MCP server",
+        description: "Steward should be the first consumer of the MCP server — proving the abstraction works before other apps adopt it",
+        solutions: [
+          { title: "Replace direct API calls in Steward with MCP tool calls", effort: "M", impact: "H", source: "Steward refactor", note: "Gradual migration: one data source at a time, starting with Wings" },
+          { title: "MCP client in Steward's API routes", effort: "S", impact: "H", source: "@modelcontextprotocol/sdk", note: "Steward calls MCP tools instead of importing lib/ functions directly" },
+          { title: "Keep direct imports as fallback during migration", effort: "S", impact: "M", source: "Feature flag", note: "Toggle between direct and MCP — rollback safety" }
+        ]
+      },
+      {
+        id: 3, title: "Caching strategy across consumers",
+        description: "Multiple apps hitting the same APIs need coordinated caching — not each app caching independently",
+        solutions: [
+          { title: "MCP server owns the Redis cache layer", effort: "M", impact: "H", source: "Upstash Redis", note: "Cache lives in the MCP server — consumers get cached responses transparently" },
+          { title: "Keep Steward's L1 in-memory cache for hot data", effort: "S", impact: "M", source: "Existing L1 cache", note: "MCP handles L2/L3, each app can still have its own L1" },
+          { title: "Cache invalidation via MCP notifications", effort: "H", impact: "M", source: "MCP protocol", note: "MCP server notifies consumers when cached data is refreshed" }
+        ]
+      },
+      {
+        id: 4, title: "Auth and access control at the MCP level",
+        description: "Different apps may have different permission levels — the MCP server needs to enforce who can access what",
+        solutions: [
+          { title: "Pass user context (email, roles) with each MCP call", effort: "S", impact: "H", source: "MCP tool parameters", note: "MCP server checks permissions per tool based on caller's roles" },
+          { title: "API key per consumer app", effort: "S", impact: "M", source: "Environment config", note: "Simple auth: Steward has key A, planning app has key B — different access levels" },
+          { title: "Reuse existing role-access system from Notion", effort: "S", impact: "H", source: "Notion Role Access DB", note: "Same roles/capabilities model already in Steward — expose via MCP" }
+        ]
+      }
+    ],
+    mvp: [
+      "MCP server with 3-5 core tools: getInstructorSchedule, getStudentProfile, getFaqs, getProducts, getRoleAccess",
+      "Wrap existing Steward lib/ functions — no new API integrations needed",
+      "Steward connects as first consumer (Wings schedule as pilot)",
+      "Redis caching owned by MCP server (reuse existing Upstash setup)",
+      "Deploy as standalone service on Scaleway"
+    ],
+    outOfScope: "Migrating all Steward data fetching to MCP at once — gradual migration, one source at a time. MCP notifications and real-time subscriptions — v2.",
+    hypotheses: [
+      { h: "Extracting the data layer into MCP reduces development time for the next app by >50%", test: "Build a simple second consumer (e.g. CLI tool or Slack bot) — measure time to first working query" },
+      { h: "The overhead of MCP (serialization, network hop) is negligible compared to the underlying API calls", test: "Benchmark: direct Wings API call vs. same call through MCP server — latency difference <50ms?" },
+      { h: "Having a shared data layer makes it easier to keep data consistent across apps", test: "Run Steward + second app side by side — do they always show the same schedule data?" },
+      { h: "The existing Steward lib/ functions can be wrapped as MCP tools with minimal refactoring", test: "Try wrapping wings.ts getInstructorBookings as an MCP tool — how much code changes?" }
+    ]
   }
 ];
 
+// ─── CD Structure: Outcome → Opportunity → Solutions ────────────────
+
+interface Interview {
+  date: string;
+  who: string;
+  role: string;
+  insights: string[];
+}
+
+interface CDOpportunity {
+  id: string;
+  title: string;
+  description: string;
+  interviews: Interview[];
+  solutionIds: string[];
+}
+
+interface ProductOutcome {
+  id: string;
+  audience: Role;
+  icon: string;
+  title: string;
+  metric: string;
+  opportunities: CDOpportunity[];
+}
+
+const outcomes: ProductOutcome[] = [
+  {
+    id: "instructeur",
+    audience: "instructeur",
+    icon: "✈️",
+    title: "Instructors spend less time on admin and more time teaching",
+    metric: "Less preparation • Faster compliance checks • Better lesson quality",
+    opportunities: [
+      {
+        id: "lesson-prep-time",
+        title: "Lesson preparation takes too long",
+        description: "Instructors open multiple gradesheets, search for checklists, and don't know where to focus",
+        interviews: [
+          { date: "2026-03-10", who: "Peter", role: "Instructor", insights: [
+            "Wants to see last 5 lessons only (not more)",
+            "Instructor name per lesson is a must-have",
+            "Wants to see actual comments, not just scores",
+            "Wants to compare summary against original comments (trust issue)",
+            "Checklist items only visible after creating lesson in Wings — wants to see them beforehand"
+          ] },
+          { date: "2026-03-10", who: "Stephanie", role: "Instructor", insights: [
+            "Primarily wants to see hot items — what's most important to watch for",
+            "Briefing should be short and compact, not too long"
+          ] },
+          { date: "2026-03-10", who: "Evert-Jan", role: "Instructor", insights: [
+            "Lesson preparation is already in the lesson cards — pay attention to those",
+            "Focus should be on compliance and document validation, not lesson content"
+          ] }
+        ],
+        solutionIds: ["remarks", "pre-lesson-checklist", "briefing"]
+      },
+      {
+        id: "no-daily-overview",
+        title: "No combined daily overview",
+        description: "No merged overview of weather, lessons, notices, and student attention points",
+        interviews: [
+          { date: "2026-03-10", who: "Mirella", role: "Instructor", insights: [
+            "Wants features with runway length information — relevant for lesson planning and briefing",
+            "Operational context (runway, weather, restrictions) belongs in the daily overview"
+          ] }
+        ],
+        solutionIds: ["daily-briefing", "cancellation"]
+      },
+      {
+        id: "student-progress-opaque",
+        title: "Student progress not quickly visible",
+        description: "Has to scroll through all report cards to get a complete picture of a student",
+        interviews: [],
+        solutionIds: ["progress", "comment-standardization"]
+      },
+      {
+        id: "compliance-manual",
+        title: "Compliance checks are scattered and manual",
+        description: "Medical, license, solo requirements are in different places — instructor has to search themselves",
+        interviews: [
+          { date: "2026-03-10", who: "Evert-Jan", role: "Instructor", insights: [
+            "Compliance is the most important thing — Steward would really add value here",
+            "Checking document validity is currently manual and error-prone"
+          ] },
+          { date: "2026-03-10", who: "Stephanie", role: "Instructor", insights: [
+            "For document checks you need to see the document name — not just 'valid/invalid'"
+          ] }
+        ],
+        solutionIds: ["license-medical-check", "solo-check"]
+      },
+      {
+        id: "logbook-errors",
+        title: "Logbook maintenance is error-prone and time-consuming",
+        description: "Manually transcribing Hobbs meter and clock times leads to calculation errors",
+        interviews: [],
+        solutionIds: ["logbook"]
+      }
+    ]
+  },
+  {
+    id: "student",
+    audience: "student",
+    icon: "🎓",
+    title: "Students can learn faster",
+    metric: "Better prepared • Less confusion • Faster through the training pathway",
+    opportunities: [
+      {
+        id: "lesson-prep-student",
+        title: "Student doesn't know how to prepare for the lesson",
+        description: "Student searches handbooks themselves without knowing what's relevant for the upcoming lesson",
+        interviews: [],
+        solutionIds: ["lesson-prep"]
+      },
+      {
+        id: "no-training-overview",
+        title: "No overview of the full training pathway",
+        description: "Student has no picture of what needs to happen outside practical lessons — theory, exams, medicals, administration",
+        interviews: [],
+        solutionIds: ["student-guidance"]
+      },
+      {
+        id: "no-feedback-channel",
+        title: "No channel for feedback on the instructor",
+        description: "Students cannot anonymously indicate how they experience the lesson",
+        interviews: [],
+        solutionIds: ["instructor-feedback"]
+      }
+    ]
+  },
+  {
+    id: "operations",
+    audience: "systeem",
+    icon: "⚙️",
+    title: "Operations spends less time on manual work and answering questions",
+    metric: "Fewer repeat questions • Better self-service • Scalable platform",
+    opportunities: [
+      {
+        id: "trust-gap",
+        title: "Users don't trust Steward enough and don't know what it can do",
+        description: "New users don't know what Steward can do, don't trust answers, or set wrong expectations",
+        interviews: [],
+        solutionIds: ["onboarding-expectations", "confidence-display", "data-source-transparency"]
+      },
+      {
+        id: "critical-questions",
+        title: "Critical questions are not handled safely",
+        description: "For questions about solo, medicals, or emergency procedures a wrong answer can have dangerous consequences",
+        interviews: [],
+        solutionIds: ["escalation-guardrails"]
+      },
+      {
+        id: "content-access",
+        title: "Content and knowledge hard to reach",
+        description: "FAQ management is technical, reference documents not available in the chat",
+        interviews: [],
+        solutionIds: ["faq-images", "knowledge-injection"]
+      },
+      {
+        id: "platform-scale",
+        title: "Platform not hands-free and not scalable to multiple apps",
+        description: "Voice output missing, data integrations locked into one app",
+        interviews: [],
+        solutionIds: ["voice-output", "mcp-data-layer"]
+      },
+      {
+        id: "platform-perf",
+        title: "Platform performance and efficiency",
+        description: "Token costs, load times, and perceived performance can be improved",
+        interviews: [],
+        solutionIds: ["toon", "pulse"]
+      },
+      {
+        id: "chat-to-action",
+        title: "Users prefer typing over clicking buttons",
+        description: "Instructors ignore capability buttons and type their question directly in chat — e.g. 'what is my schedule' or 'who am I teaching today'. The chat input should recognize this and trigger the right data action directly without Gemini in between.",
+        interviews: [
+          { date: "2026-03-10", who: "Matthijs (observation)", role: "Product owner", insights: [
+            "Instructors wanted to chat directly, not click 'My Schedule'",
+            "They typed 'what is my schedule' or 'who am I teaching today' in the chat",
+            "Conclusion: Gemini flow should be able to switch to Direct flow based on chat input",
+            "Intent detection needed: chat input matches capability → skip Gemini, fetch data directly"
+          ] }
+        ],
+        solutionIds: []
+      }
+    ]
+  },
+  {
+    id: "safety",
+    audience: "beide",
+    icon: "🛡️",
+    title: "Safer and more compliant by not missing things",
+    metric: "No expired documents missed • No unsafe solo flights • Critical questions always escalated to humans",
+    opportunities: [
+      {
+        id: "document-expiry",
+        title: "Expired documents go unnoticed",
+        description: "Medical certificates, licenses, and endorsements can expire without anyone catching it before the flight",
+        interviews: [
+          { date: "2026-03-10", who: "Evert-Jan", role: "Instructor", insights: [
+            "Document validity checking is the highest-value compliance feature",
+            "Currently manual and error-prone — easy to miss an expiry"
+          ] },
+          { date: "2026-03-10", who: "Stephanie", role: "Instructor", insights: [
+            "Need to see the actual document name, not just valid/invalid status"
+          ] }
+        ],
+        solutionIds: ["license-medical-check", "solo-check"]
+      },
+      {
+        id: "unsafe-ai-answers",
+        title: "AI gives answers on safety-critical topics without proper guardrails",
+        description: "Questions about solo authorization, emergency procedures, or medical validity need human oversight — a wrong AI answer can have real consequences",
+        interviews: [],
+        solutionIds: ["escalation-guardrails", "confidence-display"]
+      },
+      {
+        id: "compliance-visibility",
+        title: "Compliance status is not proactively surfaced",
+        description: "Instead of requiring instructors to actively check, the system should warn them when something is about to expire or is missing",
+        interviews: [
+          { date: "2026-03-10", who: "Evert-Jan", role: "Instructor", insights: [
+            "Compliance is the most important thing — Steward should proactively flag issues",
+            "Focus on preventing problems, not just answering questions"
+          ] }
+        ],
+        solutionIds: ["license-medical-check", "solo-check", "data-source-transparency"]
+      }
+    ]
+  }
+];
+
+// Helper: look up feature by ID
+function featureById(id: string): Feature | undefined {
+  return features.find((f) => f.id === id);
+}
+
+// All solution IDs that appear in outcomes (to detect orphans)
+const mappedIds = new Set(outcomes.flatMap((o) => o.opportunities.flatMap((opp) => opp.solutionIds)));
+
 // ─── Constants ──────────────────────────────────────────────────────
-const effortColors: Record<Effort, string> = { S: "#22c55e", M: "#f59e0b", H: "#ef4444" };
+const effortColors: Record<Effort, string> = { S: "#16a34a", M: "#d97706", H: "#dc2626" };
 const effortLabels: Record<Effort, string> = { S: "Small", M: "Medium", H: "Large" };
+const effortTw: Record<Effort, string> = {
+  S: "bg-green-50 text-green-700 border-green-200",
+  M: "bg-amber-50 text-amber-700 border-amber-200",
+  H: "bg-red-50 text-red-700 border-red-200",
+};
 const roleColors: Record<Role, { bg: string; text: string; border: string }> = {
-  instructeur: { bg: "#1e3a5f", text: "#60a5fa", border: "#2d4a7a" },
-  student: { bg: "#1a3a2a", text: "#4ade80", border: "#2d5a3a" },
-  beide: { bg: "#3a2a1a", text: "#fb923c", border: "#5a3a2a" },
-  systeem: { bg: "#2a1a3a", text: "#a78bfa", border: "#3a2a5a" }
+  instructeur: { bg: "bg-e-indigo-light/30", text: "text-[#1515F5]", border: "border-[#A1A1FB]" },
+  student: { bg: "bg-e-mint-light/50", text: "text-[#1B7A57]", border: "border-[#85D9BF]" },
+  beide: { bg: "bg-[#FFF3E0]", text: "text-[#B86E00]", border: "border-[#FFD699]" },
+  systeem: { bg: "bg-e-pink/30", text: "text-[#8B2FA8]", border: "border-[#DFB6EE]" },
 };
 const roleLabels: Record<Role | "alle", string> = {
   instructeur: "✈️ Instructor",
   student: "🎓 Student",
-  beide: "👥 Both",
-  systeem: "⚙️ System",
+  beide: "🛡️ All roles",
+  systeem: "⚙️ Operations",
   alle: "👁 All"
+};
+const statusTw: Record<string, string> = {
+  "Live": "bg-blue-50 text-blue-700",
+  "Priority": "bg-green-50 text-green-700",
+  "Backlog": "bg-amber-50 text-amber-700",
+  "Technical": "bg-purple-50 text-purple-700",
+  "Done ✓": "bg-green-50 text-green-700",
 };
 
 interface Group { label: string; filter: (f: Feature) => boolean }
 const groups: Group[] = [
-  { label: "🚀 Live & Done", filter: (f) => f.status === "Live" || f.status === "Done ✓" },
   { label: "🔥 Build now", filter: (f) => f.priority === 1 && f.status !== "Live" && f.status !== "Done ✓" },
   { label: "📋 Backlog", filter: (f) => f.priority === 2 && f.status !== "Technical" },
   { label: "🔧 Technical improvements", filter: (f) => f.status === "Technical" },
   { label: "⚠️ Validate first", filter: (f) => f.priority === 3 },
+  { label: "🚀 Live & Done", filter: (f) => f.status === "Live" || f.status === "Done ✓" },
 ];
 
 // ─── Page ───────────────────────────────────────────────────────────
 type ViewMode = "overview" | "detail";
 type TabMode = "tree" | "mvp" | "hypotheses";
 
+const audienceColors: Record<string, { bg: string; border: string; text: string; light: string }> = {
+  instructeur: { bg: "bg-e-indigo", border: "border-[#A1A1FB]", text: "text-[#1515F5]", light: "bg-[#F0F0FF]" },
+  student: { bg: "bg-e-mint", border: "border-[#85D9BF]", text: "text-[#1B7A57]", light: "bg-[#DAF4EC]" },
+  systeem: { bg: "bg-e-pink-light", border: "border-[#DFB6EE]", text: "text-[#8B2FA8]", light: "bg-[#F5E6FA]" },
+  beide: { bg: "bg-[#FFF3E0]", border: "border-[#FFD699]", text: "text-[#B86E00]", light: "bg-[#FFF8ED]" },
+};
+
+const audienceLabels: Record<string, string> = {
+  instructeur: "Instructor",
+  student: "Student",
+  systeem: "Operations",
+  beide: "Safety & Compliance",
+};
+
 export default function DesignPage() {
   const [authState, setAuthState] = useState<"loading" | "denied" | "allowed">("loading");
-  const [activeId, setActiveId] = useState("remarks");
-  const [activeOpp, setActiveOpp] = useState(0);
+  const [activeOutcome, setActiveOutcome] = useState("instructeur");
+  const [activeOppId, setActiveOppId] = useState("");
+  const [activeSolId, setActiveSolId] = useState("");
+  const [activeSubProblem, setActiveSubProblem] = useState(0);
   const [activeTab, setActiveTab] = useState<TabMode>("tree");
   const [view, setView] = useState<ViewMode>("overview");
-  const [roleFilter, setRoleFilter] = useState<Role | "alle">("alle");
+  const [copied, setCopied] = useState<string | null>(null);
 
   useEffect(() => {
+    if (process.env.NODE_ENV === "development") { setAuthState("allowed"); return; }
     fetch("/api/auth/shopify/session")
       .then((r) => r.json())
       .then((data) => {
@@ -1147,219 +1520,291 @@ export default function DesignPage() {
 
   if (authState === "loading") {
     return (
-      <div style={{ background: "#0f1117", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <div style={{ color: "#64748b", fontSize: 14 }}>Loading...</div>
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-sm text-e-grey">Loading...</div>
       </div>
     );
   }
 
   if (authState === "denied") {
     return (
-      <div style={{ background: "#0f1117", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", color: "#e2e8f0" }}>
-        <div style={{ textAlign: "center" }}>
-          <div style={{ fontSize: 40, marginBottom: 12 }}>🔒</div>
-          <h1 style={{ fontSize: 20, fontWeight: 700, marginBottom: 8 }}>Access Restricted</h1>
-          <p style={{ fontSize: 14, color: "#64748b", marginBottom: 16 }}>This page is only available to E-Flight staff and instructors.</p>
-          <Link href="/" style={{ fontSize: 14, color: "#3b82f6", textDecoration: "none" }}>← Back to Steward</Link>
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center space-y-3">
+          <div className="text-4xl">🔒</div>
+          <h1 className="text-xl font-bold text-foreground">Access Restricted</h1>
+          <p className="text-sm text-e-grey">This page is only available to E-Flight staff and instructors.</p>
+          <Link href="/" className="inline-block text-sm text-e-indigo hover:underline mt-2">← Back to Steward</Link>
         </div>
       </div>
     );
   }
 
-  const feature = features.find((f) => f.id === activeId);
-  const openDetail = (id: string) => { setActiveId(id); setActiveOpp(0); setActiveTab("tree"); setView("detail"); };
+  const openSolution = (outcomeId: string, oppId: string, solId: string) => {
+    setActiveOutcome(outcomeId);
+    setActiveOppId(oppId);
+    setActiveSolId(solId);
+    setActiveSubProblem(0);
+    setActiveTab("tree");
+    setView("detail");
+  };
 
-  const filteredFeatures = roleFilter === "alle"
-    ? features
-    : features.filter((f) => f.role === roleFilter || f.role === "beide");
+  const copyRef = (f: Feature, opp?: CDOpportunity, section?: string) => {
+    const outcome = outcomes.find((o) => o.opportunities.some((op) => op.solutionIds.includes(f.id)));
+    const parts = [`[CD:${f.id}] ${f.label}`];
+    if (outcome) parts.push(`Outcome: ${outcome.title}`);
+    if (opp) parts.push(`Opportunity: ${opp.title}`);
+    parts.push(`Solution: ${f.outcome.title}`);
+    if (section) parts.push(`Tab: ${section}`);
+    navigator.clipboard.writeText(parts.join("\n")).then(() => {
+      setCopied(f.id + (section || ""));
+      setTimeout(() => setCopied(null), 2000);
+    });
+  };
+
+  const currentOutcome = outcomes.find((o) => o.id === activeOutcome);
+  const currentOpp = currentOutcome?.opportunities.find((o) => o.id === activeOppId);
+  const currentSol = activeSolId ? featureById(activeSolId) : undefined;
 
   return (
-    <div style={{ fontFamily: "'DM Sans', system-ui, sans-serif", background: "#0f1117", minHeight: "100vh", color: "#e2e8f0" }}>
-      {/* eslint-disable-next-line @next/next/no-css-tags */}
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
-        .design-page * { box-sizing: border-box; }
-        .design-page ::-webkit-scrollbar { width: 4px; }
-        .design-page ::-webkit-scrollbar-track { background: #1a1d27; }
-        .design-page ::-webkit-scrollbar-thumb { background: #334155; border-radius: 2px; }
-      `}</style>
-
-      <div className="design-page" style={{ background: "#161922", borderBottom: "1px solid #1e2435", padding: "18px 32px" }}>
-        <div style={{ maxWidth: 1140, margin: "0 auto" }}>
-          <div style={{ marginBottom: 16 }}>
-            <DocsNav active="design" />
-          </div>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
-            <div>
-              <div style={{ fontSize: 11, letterSpacing: "0.15em", color: "#64748b", textTransform: "uppercase", marginBottom: 3 }}>E-Flight Steward · Continuous Discovery</div>
-              <div style={{ fontSize: 20, fontWeight: 700, color: "#f1f5f9" }}>Feature Priorities</div>
-            </div>
-            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-              {(["alle", "instructeur", "student", "systeem"] as const).map((r) => (
-                <button key={r} onClick={() => setRoleFilter(r)} style={{
-                  padding: "5px 12px", borderRadius: 7, border: "1px solid",
-                  cursor: "pointer", fontSize: 11, fontWeight: 500, fontFamily: "inherit",
-                  background: roleFilter === r ? (r === "alle" ? "#1e2435" : roleColors[r]?.bg) : "transparent",
-                  borderColor: roleFilter === r ? (r === "alle" ? "#3b82f6" : roleColors[r]?.border) : "#1e2435",
-                  color: roleFilter === r ? (r === "alle" ? "#fff" : roleColors[r]?.text) : "#64748b"
-                }}>
-                  {roleLabels[r]}
-                </button>
-              ))}
-              <div style={{ width: 1, height: 20, background: "#1e2435" }} />
-              {(["overview", "detail"] as const).map((v) => (
-                <button key={v} onClick={() => setView(v)} style={{
-                  padding: "7px 16px", borderRadius: 8, border: "none", cursor: "pointer",
-                  fontSize: 12, fontWeight: 500, fontFamily: "inherit",
-                  background: view === v ? "#3b82f6" : "#1e2435",
-                  color: view === v ? "#fff" : "#64748b"
-                }}>
-                  {v === "overview" ? "📊 Overview" : "🔍 Detail"}
-                </button>
-              ))}
-            </div>
-          </div>
+    <div className="min-h-screen bg-background p-8 fixed inset-0 overflow-y-auto">
+      <div className="max-w-4xl mx-auto space-y-8">
+        {/* Header */}
+        <div>
+          <DocsNav active="discovery" />
+          <h1 className="text-3xl font-bold text-e-indigo-dark mb-2 mt-6">Continuous Discovery</h1>
+          <p className="text-e-grey">Outcome → Opportunity → Solution. Structured based on user interviews.</p>
         </div>
-      </div>
 
-      <div className="design-page" style={{ maxWidth: 1140, margin: "0 auto", padding: "28px 32px" }}>
-        {/* ── Overview ──────────────────────────────────────────────── */}
-        {view === "overview" && groups.map((group) => {
-          const grouped = filteredFeatures.filter(group.filter);
-          if (grouped.length === 0) return null;
+        {/* View toggle */}
+        <div className="flex flex-wrap items-center gap-2">
+          {outcomes.map((o) => {
+            const c = audienceColors[o.audience];
+            return (
+              <button key={o.id} onClick={() => { setActiveOutcome(o.id); if (view === "detail") setView("overview"); }}
+                className={`text-xs font-medium px-3 py-1.5 rounded-full border cursor-pointer transition-colors ${
+                  activeOutcome === o.id ? `${c.light} ${c.text} ${c.border}` : "bg-white text-[#828282] border-[#ECECEC] hover:border-[#A1A1FB]"
+                }`}>
+                {o.icon} {audienceLabels[o.audience] || o.audience}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* ── Build Next (cross-outcome) ────────────────────────── */}
+        {view === "overview" && (() => {
+          const buildNext = outcomes.flatMap((o) =>
+            o.opportunities.flatMap((opp) =>
+              opp.solutionIds
+                .map(featureById)
+                .filter((f): f is Feature => !!f && f.priority === 1 && f.status !== "Live" && f.status !== "Done ✓")
+                .map((f) => ({ feature: f, opportunity: opp, outcome: o }))
+            )
+          );
+          if (buildNext.length === 0) return null;
           return (
-            <div key={group.label} style={{ marginBottom: 32 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
-                <div style={{ fontSize: 14, fontWeight: 700, color: "#f1f5f9" }}>{group.label}</div>
-                <div style={{ height: 1, flex: 1, background: "#1e2435" }} />
-                <div style={{ fontSize: 11, color: "#64748b" }}>{grouped.length} features</div>
+            <div className="bg-white border-2 border-[#1515F5] rounded-xl p-5">
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-[10px] font-bold tracking-widest text-[#1515F5] uppercase">🔥 Build next</span>
+                <span className="text-[10px] text-[#828282]">— highest priority based on interview evidence</span>
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(290px, 1fr))", gap: 10 }}>
-                {grouped.map((f) => (
-                  <button key={f.id} onClick={() => openDetail(f.id)} style={{
-                    background: "#161922", border: "1px solid #1e2435", borderRadius: 12,
-                    padding: "16px 18px", cursor: "pointer", textAlign: "left", color: "inherit",
-                    fontFamily: "inherit",
-                  }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
-                      <div style={{ fontSize: 14, fontWeight: 600, color: "#f1f5f9" }}>{f.label}</div>
-                      <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
-                        <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 99, background: f.statusColor + "22", color: f.statusColor, whiteSpace: "nowrap" }}>
-                          {f.status}
-                        </span>
-                        <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 99, background: roleColors[f.role]?.bg, color: roleColors[f.role]?.text, border: `1px solid ${roleColors[f.role]?.border}`, whiteSpace: "nowrap" }}>
-                          {roleLabels[f.role]}
-                        </span>
-                        {f.userRequest && (
-                          <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 99, background: "#7c3aed22", color: "#a78bfa", whiteSpace: "nowrap" }}>
-                            Requested directly
-                          </span>
-                        )}
-                      </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {buildNext.map(({ feature: f, opportunity: opp, outcome: o }) => (
+                  <button key={f.id} onClick={() => openSolution(o.id, opp.id, f.id)}
+                    className="text-left p-3 rounded-lg border border-[#ECECEC] hover:border-[#A1A1FB] hover:shadow-sm transition-all cursor-pointer font-[inherit]">
+                    <div className="flex justify-between items-start mb-1">
+                      <span className="text-xs font-semibold text-foreground">{f.label}</span>
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${statusTw[f.status] || "bg-gray-50 text-gray-600"}`}>{f.status}</span>
                     </div>
-                    <div style={{ fontSize: 12, color: "#64748b", lineHeight: 1.5, marginBottom: 10 }}>
-                      {f.outcome.title.length > 90 ? f.outcome.title.slice(0, 90) + "…" : f.outcome.title}
-                    </div>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      {f.votes != null
-                        ? <div style={{ fontSize: 11, color: "#3b82f6", fontFamily: "'DM Mono', monospace" }}>🗳 {f.votes} votes</div>
-                        : <div style={{ fontSize: 11, color: "#475569" }}>Internal idea</div>}
-                      <div style={{ fontSize: 11, color: "#475569" }}>→ detail</div>
+                    <p className="text-[11px] text-[#828282] leading-snug mb-1">
+                      {opp.title}
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] text-[#ABABAB]">{o.icon} {audienceLabels[o.audience]}</span>
+                      {opp.interviews.length > 0 && <span className="text-[10px] text-green-600">🎙 {opp.interviews.length}</span>}
+                      {f.votes != null && <span className="text-[10px] text-e-indigo">🗳 {f.votes}</span>}
                     </div>
                   </button>
                 ))}
               </div>
             </div>
           );
+        })()}
+
+        {/* ── Overview ──────────────────────────────────────────── */}
+        {view === "overview" && outcomes.map((outcome) => {
+          if (activeOutcome !== outcome.id) return null;
+          const c = audienceColors[outcome.audience];
+          return (
+            <div key={outcome.id} className="space-y-6">
+              {/* Product Outcome card */}
+              <div className={`${c.light} border-2 ${c.border} rounded-xl p-5`}>
+                <p className={`text-[10px] font-bold tracking-widest ${c.text} uppercase mb-2`}>🎯 Product Outcome — {outcome.icon} {audienceLabels[outcome.audience] || outcome.audience}</p>
+                <p className="text-sm font-semibold text-foreground leading-relaxed mb-1">{outcome.title}</p>
+                <p className="text-xs text-[#828282] font-mono">{outcome.metric}</p>
+              </div>
+
+              {/* Opportunities */}
+              {outcome.opportunities.map((opp) => {
+                const sols = opp.solutionIds.map(featureById).filter(Boolean) as Feature[];
+                const interviewCount = opp.interviews.length;
+                return (
+                  <div key={opp.id} className="bg-white border border-[#ECECEC] rounded-xl p-5">
+                    <div className="flex justify-between items-start mb-3">
+                      <div>
+                        <p className={`text-[10px] font-bold tracking-widest ${c.text} uppercase mb-1`}>Opportunity</p>
+                        <h3 className="text-sm font-semibold text-foreground">{opp.title}</h3>
+                        <p className="text-xs text-[#828282] mt-1">{opp.description}</p>
+                      </div>
+                      {interviewCount > 0 && (
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-green-50 text-green-700 border border-green-200 whitespace-nowrap">
+                          🎙 {interviewCount} interview{interviewCount > 1 ? "s" : ""}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Interview insights */}
+                    {opp.interviews.length > 0 && (
+                      <div className="mb-4 space-y-2">
+                        {opp.interviews.map((iv, i) => (
+                          <div key={i} className="bg-[#FAFAFA] rounded-lg p-3 border-l-3 border-green-400">
+                            <p className="text-[10px] text-green-700 font-medium mb-1">🎙 {iv.who} ({iv.role}) — {iv.date}</p>
+                            <ul className="space-y-0.5">
+                              {iv.insights.map((ins, j) => (
+                                <li key={j} className="text-xs text-[#828282] flex gap-1.5">
+                                  <span className="text-green-500 shrink-0">•</span>
+                                  {ins}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Solutions */}
+                    <p className="text-[10px] text-[#ABABAB] uppercase tracking-wider font-medium mb-2">Solutions</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {sols.map((f) => (
+                        <button key={f.id} onClick={() => openSolution(outcome.id, opp.id, f.id)}
+                          className="text-left p-3 rounded-lg border border-[#ECECEC] hover:border-[#A1A1FB] hover:shadow-sm transition-all cursor-pointer font-[inherit]">
+                          <div className="flex justify-between items-start mb-1">
+                            <span className="text-xs font-semibold text-foreground">{f.label}</span>
+                            <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${statusTw[f.status] || "bg-gray-50 text-gray-600"}`}>{f.status}</span>
+                          </div>
+                          <p className="text-[11px] text-[#828282] leading-snug">
+                            {f.outcome.title.length > 80 ? f.outcome.title.slice(0, 80) + "…" : f.outcome.title}
+                          </p>
+                          <div className="flex justify-between items-center mt-2">
+                            {f.votes != null
+                              ? <span className="text-[10px] text-e-indigo font-medium">🗳 {f.votes}</span>
+                              : <span className="text-[10px] text-[#ABABAB]">Internal</span>}
+                            {f.userRequest && <span className="text-[10px] text-purple-500">★ Requested</span>}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          );
         })}
 
-        {/* ── Detail ──────────────────────────────────────────────── */}
-        {view === "detail" && feature && (
-          <div>
-            {/* Feature tabs */}
-            <div style={{ display: "flex", gap: 6, marginBottom: 20, flexWrap: "wrap" }}>
-              {features.map((f) => (
-                <button key={f.id} onClick={() => openDetail(f.id)} style={{
-                  padding: "5px 12px", borderRadius: 7,
-                  border: `1px solid ${activeId === f.id ? "#3b82f6" : "#1e2435"}`,
-                  cursor: "pointer", fontSize: 12, fontWeight: 500, fontFamily: "inherit",
-                  background: activeId === f.id ? "#1e2d4a" : "transparent",
-                  color: activeId === f.id ? "#60a5fa" : "#64748b"
-                }}>
-                  {f.label}
-                  {f.votes != null && <span style={{ marginLeft: 5, color: f.statusColor }}>·{f.votes}</span>}
-                  {f.userRequest && <span style={{ marginLeft: 5, color: "#a78bfa" }}>★</span>}
-                </button>
-              ))}
+        {/* ── Detail ──────────────────────────────────────────── */}
+        {view === "detail" && currentOutcome && currentOpp && currentSol && (
+          <div className="space-y-5">
+            {/* Breadcrumb */}
+            <div className="flex items-center gap-2 text-xs text-[#828282]">
+              <button onClick={() => setView("overview")} className="hover:text-[#1515F5] cursor-pointer">{currentOutcome.icon} {audienceLabels[currentOutcome.audience] || currentOutcome.audience}</button>
+              <span>→</span>
+              <span className="text-foreground font-medium">{currentOpp.title}</span>
             </div>
 
-            {/* Outcome card */}
-            <div style={{ background: "linear-gradient(135deg, #1e3a5f 0%, #1a2744 100%)", border: "1px solid #2d4a7a", borderRadius: 12, padding: "18px 22px", marginBottom: 18 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
-                <div style={{ fontSize: 10, letterSpacing: "0.15em", color: "#60a5fa", textTransform: "uppercase" }}>🎯 Desired Outcome</div>
-                <div style={{ display: "flex", gap: 6 }}>
-                  {feature.userRequest && (
-                    <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 99, background: "#7c3aed22", color: "#a78bfa" }}>★ Requested directly</span>
-                  )}
-                  <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 99, background: feature.statusColor + "22", color: feature.statusColor }}>
-                    {feature.status}{feature.votes != null ? ` · ${feature.votes} votes` : ""}
+            {/* Solution selector pills */}
+            <div className="flex flex-wrap gap-1.5">
+              {currentOpp.solutionIds.map((sid) => {
+                const f = featureById(sid);
+                if (!f) return null;
+                return (
+                  <button key={sid} onClick={() => { setActiveSolId(sid); setActiveSubProblem(0); setActiveTab("tree"); }}
+                    className={`text-xs font-medium px-3 py-1.5 rounded-full border cursor-pointer transition-colors ${
+                      activeSolId === sid ? "bg-e-indigo-light/30 text-[#1515F5] border-[#A1A1FB]" : "bg-white text-[#828282] border-[#ECECEC] hover:border-[#A1A1FB]"
+                    }`}>
+                    {f.label}
+                    {f.votes != null && <span className="ml-1 opacity-60">·{f.votes}</span>}
+                    {f.userRequest && <span className="ml-1 text-purple-500">★</span>}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Solution outcome card */}
+            <div className="bg-[#F0F0FF] border-2 border-[#A1A1FB] rounded-xl p-5">
+              <div className="flex justify-between items-start mb-2">
+                <span className="text-[10px] font-bold tracking-widest text-[#1515F5] uppercase">💡 Solution</span>
+                <div className="flex items-center gap-1.5">
+                  <button onClick={() => copyRef(currentSol, currentOpp)}
+                    className="text-[10px] px-2 py-0.5 rounded-full bg-white/70 text-[#1515F5] border border-[#A1A1FB] hover:bg-white transition-colors cursor-pointer">
+                    {copied === currentSol.id ? "✓ Copied" : "📋 Copy ref"}
+                  </button>
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${statusTw[currentSol.status] || "bg-gray-50 text-gray-600"}`}>
+                    {currentSol.status}{currentSol.votes != null ? ` · ${currentSol.votes} votes` : ""}
                   </span>
                 </div>
               </div>
-              <div style={{ fontSize: 15, fontWeight: 600, color: "#e2e8f0", lineHeight: 1.6, marginBottom: 6 }}>{feature.outcome.title}</div>
-              <div style={{ fontSize: 12, color: "#64748b", fontFamily: "'DM Mono', monospace" }}>{feature.outcome.metric}</div>
+              <p className="text-sm font-semibold text-foreground leading-relaxed mb-1">{currentSol.outcome.title}</p>
+              <p className="text-xs text-[#828282] font-mono">{currentSol.outcome.metric}</p>
             </div>
 
             {/* Tab bar */}
-            <div style={{ display: "flex", gap: 6, marginBottom: 16 }}>
-              {(["tree", "mvp", "hypotheses"] as const).map((tab) => (
-                <button key={tab} onClick={() => setActiveTab(tab)} style={{
-                  padding: "6px 14px", borderRadius: 7, border: "1px solid",
-                  cursor: "pointer", fontSize: 12, fontWeight: 500, fontFamily: "inherit",
-                  background: activeTab === tab ? "#3b82f6" : "transparent",
-                  borderColor: activeTab === tab ? "#3b82f6" : "#1e2435",
-                  color: activeTab === tab ? "#fff" : "#64748b"
-                }}>
-                  {{ tree: "Opportunity Tree", mvp: "MVP Scope", hypotheses: "Hypotheses" }[tab]}
-                </button>
-              ))}
+            <div className="flex items-center gap-2">
+              <div className="flex gap-1 bg-[#F2F2F2] rounded-lg p-0.5 w-fit">
+                {(["tree", "mvp", "hypotheses"] as const).map((tab) => (
+                  <button key={tab} onClick={() => setActiveTab(tab)} className={`text-sm font-medium px-4 py-1.5 rounded-md transition-colors cursor-pointer ${
+                    activeTab === tab ? "bg-white text-foreground shadow-sm" : "text-[#828282] hover:text-foreground"
+                  }`}>
+                    {{ tree: "Sub-problems", mvp: "MVP Scope", hypotheses: "Hypotheses" }[tab]}
+                  </button>
+                ))}
+              </div>
+              <button onClick={() => copyRef(currentSol, currentOpp, { tree: "Sub-problems", mvp: "MVP Scope", hypotheses: "Hypotheses" }[activeTab])}
+                className="text-[10px] px-2 py-1 rounded-full bg-white text-[#828282] border border-[#ECECEC] hover:border-[#A1A1FB] hover:text-[#1515F5] transition-colors cursor-pointer">
+                {copied === currentSol.id + { tree: "Sub-problems", mvp: "MVP Scope", hypotheses: "Hypotheses" }[activeTab] ? "✓" : "📋"}
+              </button>
             </div>
 
-            {/* ── Opportunity Tree ─────────────────────────────── */}
+            {/* ── Sub-problems & Approaches ──────────────────── */}
             {activeTab === "tree" && (
-              <div style={{ display: "grid", gridTemplateColumns: "250px 1fr", gap: 14 }}>
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  {feature.opportunities.map((opp, i) => (
-                    <button key={opp.id} onClick={() => setActiveOpp(i)} style={{
-                      background: activeOpp === i ? "#1e2d4a" : "#161922",
-                      border: `1px solid ${activeOpp === i ? "#3b82f6" : "#1e2435"}`,
-                      borderRadius: 10, padding: "12px 14px", cursor: "pointer", textAlign: "left", color: "inherit",
-                      fontFamily: "inherit",
-                    }}>
-                      <div style={{ fontSize: 10, color: "#3b82f6", marginBottom: 4, fontFamily: "'DM Mono', monospace" }}>OPP-{opp.id}</div>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: "#f1f5f9", marginBottom: 4 }}>{opp.title}</div>
-                      <div style={{ fontSize: 11, color: "#64748b", lineHeight: 1.4 }}>{opp.description}</div>
+              <div className="grid grid-cols-1 md:grid-cols-[240px_1fr] gap-4">
+                <div className="flex flex-col gap-2">
+                  {currentSol.opportunities.map((opp, i) => (
+                    <button key={opp.id} onClick={() => setActiveSubProblem(i)} className={`text-left p-3 rounded-lg border cursor-pointer transition-all font-[inherit] ${
+                      activeSubProblem === i ? "bg-[#F0F0FF] border-[#A1A1FB]" : "bg-white border-[#ECECEC] hover:border-[#A1A1FB]"
+                    }`}>
+                      <span className="text-[10px] text-[#1515F5] font-mono font-medium">SP-{opp.id}</span>
+                      <p className="text-xs font-semibold text-foreground mt-1">{opp.title}</p>
+                      <p className="text-[11px] text-[#828282] mt-1 leading-snug">{opp.description}</p>
                     </button>
                   ))}
                 </div>
-                <div>
-                  <div style={{ fontSize: 11, color: "#64748b", marginBottom: 10, textTransform: "uppercase", letterSpacing: "0.1em" }}>
-                    Solutions → {feature.opportunities[activeOpp]?.title}
-                  </div>
-                  {feature.opportunities[activeOpp]?.solutions.map((sol, i) => (
-                    <div key={i} style={{ background: "#161922", border: "1px solid #1e2435", borderRadius: 10, padding: "14px 16px", marginBottom: 8, display: "grid", gridTemplateColumns: "1fr auto", gap: 14 }}>
-                      <div>
-                        <div style={{ fontSize: 14, fontWeight: 600, color: "#f1f5f9", marginBottom: 4 }}>{sol.title}</div>
-                        <div style={{ fontSize: 12, color: "#94a3b8", marginBottom: 3 }}><span style={{ color: "#64748b" }}>Source: </span>{sol.source}</div>
-                        <div style={{ fontSize: 12, color: "#64748b", fontStyle: "italic" }}>{sol.note}</div>
+                <div className="space-y-2">
+                  <p className="text-[10px] text-[#828282] uppercase tracking-wider font-medium mb-2">
+                    Approaches → {currentSol.opportunities[activeSubProblem]?.title}
+                  </p>
+                  {currentSol.opportunities[activeSubProblem]?.solutions.map((sol, i) => (
+                    <div key={i} className="bg-white border border-[#ECECEC] rounded-lg p-4 flex justify-between gap-4">
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-foreground">{sol.title}</p>
+                        <p className="text-xs text-[#828282] mt-0.5"><span className="text-[#ABABAB]">Source: </span>{sol.source}</p>
+                        <p className="text-xs text-[#ABABAB] italic mt-0.5">{sol.note}</p>
                       </div>
-                      <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                      <div className="flex gap-2 items-center shrink-0">
                         {(["effort", "impact"] as const).map((type) => (
-                          <div key={type} style={{ textAlign: "center" }}>
-                            <div style={{ fontSize: 10, color: "#64748b", textTransform: "uppercase", marginBottom: 4 }}>{type}</div>
-                            <div style={{ background: effortColors[sol[type]] + "22", color: effortColors[sol[type]], border: `1px solid ${effortColors[sol[type]]}44`, borderRadius: 6, padding: "3px 10px", fontSize: 12, fontWeight: 600 }}>
+                          <div key={type} className="text-center">
+                            <p className="text-[10px] text-[#ABABAB] uppercase mb-1">{type}</p>
+                            <span className={`text-[11px] font-semibold px-2.5 py-1 rounded border ${effortTw[sol[type]]}`}>
                               {effortLabels[sol[type]]}
-                            </div>
+                            </span>
                           </div>
                         ))}
                       </div>
@@ -1369,34 +1814,34 @@ export default function DesignPage() {
               </div>
             )}
 
-            {/* ── MVP Scope ────────────────────────────────────── */}
+            {/* ── MVP Scope ──────────────────────────────────── */}
             {activeTab === "mvp" && (
-              <div>
-                <div style={{ fontSize: 13, color: "#64748b", marginBottom: 14 }}>Minimum scope for first working version.</div>
-                {feature.mvp.map((item, i) => (
-                  <div key={i} style={{ background: "#161922", border: "1px solid #1e2435", borderRadius: 10, padding: "12px 16px", marginBottom: 8, display: "flex", alignItems: "center", gap: 12 }}>
-                    <div style={{ width: 24, height: 24, borderRadius: "50%", background: "#1e3a5f", border: "1px solid #2d4a7a", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: "#60a5fa", flexShrink: 0 }}>{i + 1}</div>
-                    <div style={{ fontSize: 13, color: "#e2e8f0" }}>{item}</div>
+              <div className="space-y-2">
+                <p className="text-xs text-[#828282] mb-3">Minimum scope for first working version.</p>
+                {currentSol.mvp.map((item, i) => (
+                  <div key={i} className="bg-white border border-[#ECECEC] rounded-lg px-4 py-3 flex items-center gap-3">
+                    <span className="w-6 h-6 rounded-full bg-[#F0F0FF] border border-[#A1A1FB] flex items-center justify-center text-[11px] font-bold text-[#1515F5] shrink-0">{i + 1}</span>
+                    <span className="text-sm text-foreground">{item}</span>
                   </div>
                 ))}
-                <div style={{ background: "#1a1f0e", border: "1px solid #365314", borderRadius: 10, padding: "12px 16px", marginTop: 6 }}>
-                  <div style={{ fontSize: 11, color: "#84cc16", fontWeight: 600, marginBottom: 3 }}>✓ Out of scope v1</div>
-                  <div style={{ fontSize: 13, color: "#64748b" }}>{feature.outOfScope}</div>
+                <div className="bg-green-50 border border-green-200 rounded-lg px-4 py-3 mt-2">
+                  <p className="text-[11px] font-semibold text-green-700 mb-1">✓ Out of scope v1</p>
+                  <p className="text-xs text-[#828282]">{currentSol.outOfScope}</p>
                 </div>
               </div>
             )}
 
             {/* ── Hypotheses ──────────────────────────────────── */}
             {activeTab === "hypotheses" && (
-              <div>
-                <div style={{ fontSize: 13, color: "#64748b", marginBottom: 12 }}>Validate before you build.</div>
-                {feature.hypotheses.map((item, i) => (
-                  <div key={i} style={{ background: "#161922", border: "1px solid #1e2435", borderRadius: 10, padding: "16px 18px", marginBottom: 10 }}>
-                    <div style={{ fontSize: 10, color: "#f59e0b", letterSpacing: "0.15em", textTransform: "uppercase", marginBottom: 6 }}>Hypothesis {i + 1}</div>
-                    <div style={{ fontSize: 14, color: "#f1f5f9", fontWeight: 500, marginBottom: 10, lineHeight: 1.5 }}>&ldquo;{item.h}&rdquo;</div>
-                    <div style={{ background: "#0f1117", borderRadius: 8, padding: "10px 14px", borderLeft: "3px solid #f59e0b" }}>
-                      <div style={{ fontSize: 10, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 3 }}>How to test</div>
-                      <div style={{ fontSize: 13, color: "#94a3b8", lineHeight: 1.5 }}>{item.test}</div>
+              <div className="space-y-3">
+                <p className="text-xs text-[#828282] mb-2">Validate before you build.</p>
+                {currentSol.hypotheses.map((item, i) => (
+                  <div key={i} className="bg-white border border-[#ECECEC] rounded-lg p-4">
+                    <p className="text-[10px] text-amber-600 uppercase tracking-wider font-bold mb-2">Hypothesis {i + 1}</p>
+                    <p className="text-sm font-medium text-foreground leading-relaxed mb-3">&ldquo;{item.h}&rdquo;</p>
+                    <div className="bg-[#FAFAFA] rounded-md p-3 border-l-3 border-amber-400">
+                      <p className="text-[10px] text-[#ABABAB] uppercase tracking-wider mb-1">How to test</p>
+                      <p className="text-xs text-[#828282] leading-relaxed">{item.test}</p>
                     </div>
                   </div>
                 ))}

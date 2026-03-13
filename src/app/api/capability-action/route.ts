@@ -214,6 +214,9 @@ export async function POST(request: NextRequest) {
       let inferredCourseName: string | null = null;
       let inferredPlanId: number | null = null;
       let inferredPlanName: string | null = null;
+      let inferredPrep: string | null = null;
+      let inferredBriefing: string | null = null;
+      let inferredTem: string | null = null;
 
       if (hasCourse && coursePlansForPrev.length > 0) {
         // Booking has a lesson plan — find previous in course sequence
@@ -250,6 +253,9 @@ export async function POST(request: NextRequest) {
             const nextPlan = coursePlans[lastIdx + 1];
             inferredPlanId = nextPlan.id;
             inferredPlanName = nextPlan.name;
+            inferredPrep = nextPlan.prep;
+            inferredBriefing = nextPlan.briefing;
+            inferredTem = nextPlan.tem;
             // The "previous lesson" is the student's last completed one
             previousLesson = {
               bookingId: lastWithCourse.bookingId,
@@ -366,8 +372,9 @@ export async function POST(request: NextRequest) {
           courseName: l.plan?.course?.name || inferredCourseName,
           isAssessment: l.plan?.isAssessment || false,
           description: l.plan?.description || null,
-          prep: l.plan?.prep || null,
-          briefing: l.plan?.briefing || null,
+          prep: l.plan?.prep || inferredPrep,
+          briefing: l.plan?.briefing || inferredBriefing,
+          tem: l.plan?.tem || inferredTem,
           status: l.status?.name || null,
           comments: l.comments,
           flights: l.flights.map((f): BookingFlight => ({

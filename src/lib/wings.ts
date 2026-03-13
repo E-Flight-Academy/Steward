@@ -205,7 +205,7 @@ query GetBookingDetail($bookingId: Int!) {
       lessons {
         id
         comments
-        plan { id name isAssessment description prep briefing course { id name } }
+        plan { id name isAssessment description prep briefing tem course { id name } }
         status { name }
         flights {
           id
@@ -245,7 +245,7 @@ export interface WingsBookingDetail {
   lessons: {
     id: number;
     comments: string | null;
-    plan: { id: number; name: string; isAssessment: boolean; description: string | null; prep: string | null; briefing: string | null; course: { id: number; name: string } | null } | null;
+    plan: { id: number; name: string; isAssessment: boolean; description: string | null; prep: string | null; briefing: string | null; tem: string | null; course: { id: number; name: string } | null } | null;
     status: { name: string } | null;
     flights: {
       id: number;
@@ -496,6 +496,7 @@ export interface WingsLessonPlanFull {
   description: string | null;
   prep: string | null;
   briefing: string | null;
+  tem: string | null;
 }
 
 const COURSE_LESSON_PLANS_QUERY = `
@@ -503,7 +504,7 @@ query GetCourseLessonPlans($courseId: Int!) {
   lessonPlans(first: 100, filter: { course: $courseId }) {
     data {
       id sequence name isAssessment
-      description prep briefing
+      description prep briefing tem
     }
   }
 }

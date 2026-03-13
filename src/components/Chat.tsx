@@ -28,6 +28,7 @@ export default function Chat() {
   const [shopifyUser, setShopifyUser] = useState<{ email: string; firstName: string; lastName: string; displayName: string } | null>(null);
   const [userRoles, setUserRoles] = useState<string[]>([]);
   const [capabilities, setCapabilities] = useState<string[]>([]);
+  const [wingsUserId, setWingsUserId] = useState<number | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -709,6 +710,7 @@ export default function Chat() {
           setShopifyUser(data.customer);
           setUserRoles(data.roles || []);
           setCapabilities(data.capabilities || []);
+          setWingsUserId(data.wingsUserId || null);
           // Re-fetch FAQs for authenticated audience
           fetchRetry("/api/faqs").then((res) => res.json()).then((d) => setFaqs(d)).catch(() => {});
         }
@@ -972,6 +974,7 @@ export default function Chat() {
         setLangOpen={setLangOpen}
         switchLanguage={switchLanguage}
         shopifyUser={shopifyUser}
+        wingsUserId={wingsUserId}
         userMenuOpen={userMenuOpen}
         setUserMenuOpen={setUserMenuOpen}
         displayRole={displayRole}

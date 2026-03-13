@@ -348,7 +348,7 @@ export async function POST(request: NextRequest) {
     // Filter FAQs by audience: no audience = public, with audience = role must match
     const normalizedRoles = userRoles.map((r) => r.toLowerCase());
     const accessibleFaqs = faqs.filter((f) =>
-      f.audience.length === 0 || f.audience.some((a) => normalizedRoles.includes(a))
+      f.audience.length === 0 || f.audience.includes("_anonymous") || f.audience.some((a) => normalizedRoles.includes(a))
     );
     if (accessibleFaqs.length < faqs.length) {
       console.log(`FAQ role filter: ${faqs.length} total → ${accessibleFaqs.length} accessible (roles: [${userRoles.join(", ")}])`);

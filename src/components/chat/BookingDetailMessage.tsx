@@ -241,6 +241,44 @@ function PrevHotItems({ items }: { items: BookingDetail["lessons"][0]["records"]
   );
 }
 
+function LessonCardSection({ lesson }: { lesson: BookingDetail["lessons"][0] }) {
+  const [openSection, setOpenSection] = useState<string | null>(null);
+
+  const sections: { key: string; label: string; content: string }[] = [];
+  if (lesson.prep) sections.push({ key: "prep", label: "Preparation", content: lesson.prep });
+  if (lesson.briefing) sections.push({ key: "briefing", label: "Briefing", content: lesson.briefing });
+  if (lesson.tem) sections.push({ key: "tem", label: "TEM", content: lesson.tem });
+
+  if (sections.length === 0) return null;
+
+  return (
+    <div className="space-y-1">
+      <p className="text-xs text-e-grey font-medium">Lesson card</p>
+      {sections.map((s) => {
+        const isOpen = openSection === s.key;
+        return (
+          <div key={s.key} className="bg-[#F7F7F7] dark:bg-gray-800 rounded-lg overflow-hidden">
+            <button
+              onClick={() => setOpenSection(isOpen ? null : s.key)}
+              className="flex items-center gap-2 px-2.5 py-1.5 w-full text-left cursor-pointer"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-e-grey shrink-0 transition-transform" style={{ transform: isOpen ? "rotate(180deg)" : "rotate(0deg)" }}>
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
+              <span className="text-sm font-medium">{s.label}</span>
+            </button>
+            {isOpen && (
+              <div className="px-2.5 pb-2 pt-0">
+                <p className="text-sm text-foreground whitespace-pre-wrap ml-5">{s.content}</p>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function PreviousLessonSection({ prev, student, onBookingClick }: {
   prev: PreviousLesson;
   student: string;
@@ -304,6 +342,8 @@ function PreviousLessonSection({ prev, student, onBookingClick }: {
 }
 
 export default function BookingDetailMessage({ data, onBookingClick }: BookingDetailMessageProps) {
+  const [photoOverlay, setPhotoOverlay] = useState(false);
+
   const formatDate = (dateStr: string) => {
     const d = new Date(dateStr + "T00:00:00");
     return d.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric", year: "numeric" });
@@ -314,16 +354,46 @@ export default function BookingDetailMessage({ data, onBookingClick }: BookingDe
     .filter((n): n is string => n !== null);
 
   const isPast = data.date < new Date().toISOString().slice(0, 10);
+  const photoUrl = data.studentUserId
+    ? `https://steward-images.s3.nl-ams.scw.cloud/wings-photos/${data.studentUserId}.jpg`
+    : null;
 
   return (
     <div className="space-y-3">
+      {/* Photo overlay */}
+      {photoOverlay && photoUrl && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 cursor-pointer"
+          onClick={() => setPhotoOverlay(false)}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={photoUrl.replace('.jpg', '-large.jpg')}
+            alt={data.student}
+            className="max-w-[80vw] max-h-[80vh] rounded-2xl shadow-2xl object-contain"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div>
-          <p className="font-semibold text-foreground">{data.student}</p>
-          <p className="text-sm text-e-grey">
-            {formatDate(data.date)} · {data.timeFrom}–{data.timeTo}
-          </p>
+        <div className="flex items-center gap-3">
+          {photoUrl && (
+            <img
+              src={photoUrl}
+              alt=""
+              className="w-10 h-10 rounded-full object-cover shrink-0 bg-[#F2F2F2] cursor-pointer hover:ring-2 hover:ring-[#1515F5]/30 transition-all"
+              onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+              onClick={() => setPhotoOverlay(true)}
+            />
+          )}
+          <div>
+            <p className="font-semibold text-foreground">{data.student}</p>
+            <p className="text-sm text-e-grey">
+              {formatDate(data.date)} · {data.timeFrom}–{data.timeTo}
+            </p>
+          </div>
         </div>
         <div className="flex items-center gap-2">
           <span
@@ -403,6 +473,13 @@ export default function BookingDetailMessage({ data, onBookingClick }: BookingDe
         </div>
       </div>
 
+      {/* Lesson card: prep, briefing, TEM (future bookings only) */}
+      {!isPast && data.lessons.map((lesson) => (
+        (lesson.prep || lesson.briefing || lesson.tem) && (
+          <LessonCardSection key={`card-${lesson.id}`} lesson={lesson} />
+        )
+      ))}
+
       {/* Lesson details (past bookings only) */}
       {isPast && data.lessons.map((lesson) => (
         (lesson.comments || lesson.records.length > 0) && (
@@ -477,7 +554,14 @@ export default function BookingDetailMessage({ data, onBookingClick }: BookingDe
                       ) : (
                         <span className="shrink-0 w-2 h-2 rounded-full bg-green-500" title="Valid" />
                       )}
-                      <span className="truncate">{doc.name}</span>
+                      <span className="truncate">
+                        {doc.name}
+                        {doc.filename && (
+                          <span className="text-e-grey font-normal" title={doc.filename}>
+                            {" · "}{doc.filename.replace(/\.[^.]+$/, "").replace(/[_-]/g, " ").replace(/\s+/g, " ").trim()}
+                          </span>
+                        )}
+                      </span>
                     </div>
                     <span
                       className={`text-xs shrink-0 ml-2 font-medium ${
@@ -545,7 +629,14 @@ export default function BookingDetailMessage({ data, onBookingClick }: BookingDe
                         ) : (
                           <span className="shrink-0 w-2 h-2 rounded-full bg-green-500" />
                         )}
-                        <span className="truncate">{doc.name}</span>
+                        <span className="truncate">
+                          {doc.name}
+                          {doc.filename && (
+                            <span className="text-e-grey font-normal" title={doc.filename}>
+                              {" · "}{doc.filename.replace(/\.[^.]+$/, "").replace(/[_-]/g, " ").replace(/\s+/g, " ").trim()}
+                            </span>
+                          )}
+                        </span>
                       </div>
                       <span
                         className={`text-xs shrink-0 ml-2 font-medium ${

@@ -36,6 +36,7 @@ interface InstructorResponse {
 export interface AirtableUserData {
   roles: string[];
   wingsUserId: number | null;
+  name: string | null;
 }
 
 /**
@@ -44,7 +45,7 @@ export interface AirtableUserData {
 async function queryCustomers(email: string): Promise<AirtableUserData> {
   const safeEmail = email.replace(/"/g, '\\"');
   const formula = `OR(LOWER({Client E-Mail}) = LOWER("${safeEmail}"), LOWER({E-Mail 2}) = LOWER("${safeEmail}"))`;
-  const fields = ["Wings Role", "Client E-Mail", "Wings User ID", "E-Mail 2", "Wings User ID 2"].map(f => `fields%5B%5D=${encodeURIComponent(f)}`).join("&");
+  const fields = ["Wings Role", "Client E-Mail", "Wings User ID", "E-Mail 2", "Wings User ID 2", "Name"].map(f => `fields%5B%5D=${encodeURIComponent(f)}`).join("&");
   const url = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${encodeURIComponent("Customers")}?filterByFormula=${encodeURIComponent(formula)}&${fields}`;
 
   const response = await fetch(url, {
@@ -52,10 +53,10 @@ async function queryCustomers(email: string): Promise<AirtableUserData> {
     next: { revalidate: 300 },
   });
 
-  if (!response.ok) return { roles: [], wingsUserId: null };
+  if (!response.ok) return { roles: [], wingsUserId: null, name: null };
 
   const data: AirtableResponse = await response.json();
-  if (data.records.length === 0) return { roles: [], wingsUserId: null };
+  if (data.records.length === 0) return { roles: [], wingsUserId: null, name: null };
 
   const record = data.records[0].fields;
   const roles = record["Wings Role"] || [];
@@ -63,7 +64,8 @@ async function queryCustomers(email: string): Promise<AirtableUserData> {
   const wingsUserId = matchedViaAlt
     ? (record["Wings User ID 2"] ?? record["Wings User ID"] ?? null)
     : (record["Wings User ID"] ?? null);
-  return { roles, wingsUserId };
+  const name = record["Name"]?.[0] || null;
+  return { roles, wingsUserId, name };
 }
 
 /**
@@ -72,7 +74,7 @@ async function queryCustomers(email: string): Promise<AirtableUserData> {
 async function queryInstructors(email: string): Promise<AirtableUserData> {
   const safeEmail = email.replace(/"/g, '\\"');
   const formula = `LOWER({Email}) = LOWER("${safeEmail}")`;
-  const fields = ["Email", "Wings ID", "All Roles"].map(f => `fields%5B%5D=${encodeURIComponent(f)}`).join("&");
+  const fields = ["Email", "Wings ID", "All Roles", "Name"].map(f => `fields%5B%5D=${encodeURIComponent(f)}`).join("&");
   const url = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${encodeURIComponent("Instructors")}?filterByFormula=${encodeURIComponent(formula)}&${fields}`;
 
   const response = await fetch(url, {
@@ -80,17 +82,18 @@ async function queryInstructors(email: string): Promise<AirtableUserData> {
     next: { revalidate: 300 },
   });
 
-  if (!response.ok) return { roles: [], wingsUserId: null };
+  if (!response.ok) return { roles: [], wingsUserId: null, name: null };
 
   const data: InstructorResponse = await response.json();
-  if (data.records.length === 0) return { roles: [], wingsUserId: null };
+  if (data.records.length === 0) return { roles: [], wingsUserId: null, name: null };
 
   const record = data.records[0].fields;
   const roles = record["All Roles"]
     ? record["All Roles"].split(",").map((r) => r.trim()).filter(Boolean)
     : [];
   const wingsUserId = record["Wings ID"] ?? null;
-  return { roles, wingsUserId };
+  const name = record["Name"] || null;
+  return { roles, wingsUserId, name };
 }
 
 /**
@@ -100,7 +103,7 @@ async function queryInstructors(email: string): Promise<AirtableUserData> {
 export async function getUserData(email: string): Promise<AirtableUserData> {
   if (!AIRTABLE_TOKEN || !AIRTABLE_BASE_ID) {
     console.warn("Airtable not configured");
-    return { roles: [], wingsUserId: null };
+    return { roles: [], wingsUserId: null, name: null };
   }
 
   try {
@@ -121,10 +124,11 @@ export async function getUserData(email: string): Promise<AirtableUserData> {
     ].filter(Boolean);
     console.log(`[Airtable] ${email}: roles=[${allRoles.join(", ")}], wingsUserId=${wingsUserId}, sources=[${sources.join(", ")}]`);
 
-    return { roles: allRoles, wingsUserId };
+    const name = customerData.name ?? instructorData.name;
+    return { roles: allRoles, wingsUserId, name };
   } catch (error) {
     console.error("Failed to fetch data from Airtable:", error);
-    return { roles: [], wingsUserId: null };
+    return { roles: [], wingsUserId: null, name: null };
   }
 }
 

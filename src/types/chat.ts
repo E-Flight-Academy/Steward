@@ -40,6 +40,7 @@ export interface BookingLesson {
   description: string | null;
   prep: string | null;
   briefing: string | null;
+  tem: string | null;
   status: string | null;
   comments: string | null;
   flights: BookingFlight[];

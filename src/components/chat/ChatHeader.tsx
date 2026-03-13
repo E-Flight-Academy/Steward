@@ -24,6 +24,7 @@ interface ChatHeaderProps {
   setLangOpen: (v: boolean) => void;
   switchLanguage: (lang: string) => void;
   shopifyUser: { email: string; firstName: string; lastName: string; displayName: string } | null;
+  wingsUserId: number | null;
   userMenuOpen: boolean;
   setUserMenuOpen: (v: boolean) => void;
   displayRole: string;
@@ -47,6 +48,7 @@ export default function ChatHeader({
   setLangOpen,
   switchLanguage,
   shopifyUser,
+  wingsUserId,
   userMenuOpen,
   setUserMenuOpen,
   displayRole,
@@ -63,6 +65,8 @@ export default function ChatHeader({
   t,
 }: ChatHeaderProps) {
   const [fontSize, setFontSizeState] = useState<FontSize>("m");
+  const [photoError, setPhotoError] = useState(false);
+  const photoUrl = wingsUserId ? `https://steward-images.s3.nl-ams.scw.cloud/wings-photos/${wingsUserId}.jpg` : null;
 
   useEffect(() => {
     const saved = getFontSize();
@@ -213,12 +217,25 @@ export default function ChatHeader({
               aria-expanded={userMenuOpen}
               className="flex items-center gap-2 p-2 rounded-xl text-e-grey hover:text-e-indigo hover:bg-[#F0F0FF] transition-colors cursor-pointer"
             >
-              <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                <circle cx="12" cy="7" r="4" />
-              </svg>
-              <span className="hidden sm:inline text-sm">{shopifyUser.firstName || shopifyUser.email}</span>
-              <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="hidden sm:inline">
+              {photoUrl && !photoError ? (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img
+                  src={photoUrl}
+                  alt=""
+                  className="w-7 h-7 rounded-full object-cover"
+                  onError={() => setPhotoError(true)}
+                />
+              ) : (
+                <span className="w-7 h-7 rounded-full bg-[#1515F5] text-white text-[9px] font-bold flex items-center justify-center shrink-0 lowercase">
+                  {(shopifyUser.displayName || shopifyUser.firstName || shopifyUser.email.split("@")[0])
+                    .replace(/\d+/g, "").trim()
+                    .split(/[\s-]+/)
+                    .map((w: string) => w[0] || "")
+                    .join("")
+                    .slice(0, 3)}
+                </span>
+              )}
+              <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="m6 9 6 6 6-6" />
               </svg>
             </button>
