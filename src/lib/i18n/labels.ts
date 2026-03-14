@@ -27,6 +27,7 @@ export interface UiLabels {
   "kb.notSyncedDetail": string;
   "header.share": string;
   "chat.sourceWebsite": string;
+  "chat.sourceExternal": string;
   "chat.sourceFaq": string;
   "header.myAccount": string;
   "header.role.student": string;
@@ -75,6 +76,7 @@ export const DEFAULT_LABELS: UiLabels = {
   "kb.notSyncedDetail": "Data is being loaded. This takes a few seconds...",
   "header.share": "Share",
   "chat.sourceWebsite": "Read more on our website",
+  "chat.sourceExternal": "Visit this website",
   "chat.sourceFaq": "View frequently asked questions",
   "header.myAccount": "My account",
   "header.role.student": "Student",

@@ -96,7 +96,10 @@ export default function MessageBubble({ message, index, onRate, onFaqClick, onAv
                         <line x1="10" y1="14" x2="21" y2="3" />
                       </svg>
                     </div>
-                    <span className="text-sm font-medium text-foreground truncate flex-1">{link.label}</span>
+                    <div className="flex-1 min-w-0">
+                      <span className="text-sm font-medium text-foreground truncate block">{link.label}</span>
+                      <span className="text-xs text-e-grey dark:text-gray-400">{link.url.includes("eflight.nl") ? t("chat.sourceWebsite") : t("chat.sourceExternal")}</span>
+                    </div>
                     <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-e-grey dark:text-gray-400 shrink-0">
                       <polyline points="9 18 15 12 9 6" />
                     </svg>
@@ -119,7 +122,7 @@ export default function MessageBubble({ message, index, onRate, onFaqClick, onAv
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-foreground truncate">{sourceLabel || source}</p>
-                      <p className="text-xs text-e-grey dark:text-gray-400">{t("chat.sourceWebsite")}</p>
+                      <p className="text-xs text-e-grey dark:text-gray-400">{sourceUrl && sourceUrl.includes("eflight.nl") ? t("chat.sourceWebsite") : t("chat.sourceExternal")}</p>
                     </div>
                     <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-e-grey dark:text-gray-400 group-hover/source:text-[#1515F5] transition-colors shrink-0">
                       <polyline points="9 18 15 12 9 6" />
