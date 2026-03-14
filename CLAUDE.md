@@ -48,6 +48,17 @@ The chat flow:
 3. API route forwards to Gemini API with conversation context
 4. Response streamed back to Chat component
 
+## E-Flight Gateway
+
+Airtable calls (and later Wings/Shopify/Notion) are routed through the E-Flight Gateway — a separate Next.js API service.
+
+- **Repo**: https://github.com/E-Flight-Academy/eflight-gateway
+- **Production URL**: `https://steward18cc86cd-eflight-gateway.functions.fnc.nl-ams.scw.cloud`
+- **Auth**: `Authorization: Bearer <GATEWAY_API_KEY>`
+- **Endpoints**: `/api/airtable/users?email=`, `/api/airtable/search?q=`, `/api/health`
+
+In `src/lib/airtable.ts`: if `GATEWAY_URL` + `GATEWAY_API_KEY` are set, all calls route through the gateway. Falls back to direct Airtable calls if not configured.
+
 ## Post-Feature Checklist
 
 After completing a new feature or significant change, ask the user:
