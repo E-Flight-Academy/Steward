@@ -5,14 +5,17 @@ import { searchCustomers } from "@/lib/airtable";
 const ADMIN_EMAILS = ["matthijs@eflight.nl", "matthijscollard@gmail.com", "wesley@eflight.nl", "paulien@eflight.nl", "milos@eflight.nl"];
 
 export async function GET(request: NextRequest) {
-  try {
-    const session = await getSession();
-    const email = session?.customer?.email?.toLowerCase();
-    if (!email || !ADMIN_EMAILS.includes(email)) {
-      return NextResponse.json({ error: `unauthorized (${email || "no session"})` }, { status: 401 });
+  const isDev = process.env.NODE_ENV === "development";
+  if (!isDev) {
+    try {
+      const session = await getSession();
+      const email = session?.customer?.email?.toLowerCase();
+      if (!email || !ADMIN_EMAILS.includes(email)) {
+        return NextResponse.json({ error: `unauthorized (${email || "no session"})` }, { status: 401 });
+      }
+    } catch {
+      return NextResponse.json({ error: "session error" }, { status: 401 });
     }
-  } catch {
-    return NextResponse.json({ error: "session error" }, { status: 401 });
   }
 
   const query = request.nextUrl.searchParams.get("q")?.trim();
